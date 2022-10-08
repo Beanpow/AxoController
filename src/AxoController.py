@@ -8,7 +8,7 @@
 @Desc    :   AxoController
 '''
 import serial
-
+import numpy as np
 
 class AxoController:
 
@@ -19,7 +19,12 @@ class AxoController:
         self.ser.write(msg)
 
     def enter_control_mode(self):
-        pass
+        control_command = np.array([0x55,5,0xA0,self.validation_message,0xBB])
+        return control_command
+    
+    def exit_control_mode(self):
+        control_command = np.array([0x55,5,0xA1,self.validation_message,0xBB])
+        return control_command
 
     def validation_message(self):
         c = "VS"
