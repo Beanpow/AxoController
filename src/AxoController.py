@@ -21,6 +21,10 @@ class AxoController:
     def enter_control_mode(self):
         pass
 
+    def validation_message(self):
+        c = "VS"
+        return c
+
 
 if __name__ == "__main__":
     a = bytearray([0x1, 0x2, 0x3, 0x4])
