@@ -7,8 +7,10 @@
 @Contact :   beanpow@gmail.com
 @Desc    :   AxoController
 '''
+from signal import SIGINT
 import serial
 import numpy as np
+import signal
 
 class AxoController:
 
@@ -29,9 +31,14 @@ class AxoController:
     def validation_message(self):
         c = "VS"
         return c
+    
+    def emergency_stop(self,signal_received,steps):
+        
+        exit(0)
 
 
 if __name__ == "__main__":
     a = bytearray([0x1, 0x2, 0x3, 0x4])
     a[0] = 10
     ac = AxoController("com3")
+    signal(SIGINT,ac.emergency_stop)
