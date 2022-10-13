@@ -15,65 +15,74 @@ from utils import check_sum, get_16bit
 
 class AxoController:
 
-    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0):
+    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, verbose: bool = True):
         # Constant
         self._hip_limit = [-25, 95]      # degree
         self._knee_limit = [-100, 8]     # degree
         self._vel_limit = [-3000, 3000]  # rpm
         self._current_limit = [-15, 15]  # A
 
+        # Variable for communication
+        self.info_stack = []
+        self.info_stacksize = 10000
+        self.is_get_info = False
+
         # Establish serial connection
         self.ser = serial.Serial(port, byterate, timeout=timeout)
         assert self.ser.is_open is True
 
         # Initial check
-        print("Checking the connection and robot state...")
+        if verbose:
+            print("[info]: Checking the connection and robot state...")
         self.initial_check()
-        print("The connection and robot state is fine.")
+        if verbose:
+            print("[info]: The connection and robot state is fine.")
 
         # Variable for control
         self.control_mode = "pos"
-        self.in_control_mode = self.update_in_control_mode()
+        self.in_control_mode = False
+        self.update_in_control_mode()
         assert self.in_control_mode is False
 
-        # Variable for communication
-        self.info_stack = []
-        self.info_stacksize = 10000
-        self.is_get_info = False
         # self.open_receive_info()
 
     def __del__(self):
+        if self.is_get_info:
+            self.close_receive_info()
         self.ser.close()
 
     def _send_message(self, msg: bytearray):
         assert msg[-2] == check_sum(msg)
+        time.sleep(0.005)
         write_num = self.ser.write(msg)
+        assert write_num == len(msg)
 
-        print(write_num, len(msg))
-
-    def update_in_control_mode(self):
+    def update_in_control_mode(self) -> None:
         robot_state = self.get_robot_state()
         assert robot_state[5] == robot_state[8] == robot_state[11] == robot_state[14]
 
-        return robot_state[5] == 1
+        print(robot_state[5])
+
+        self.in_control_mode = robot_state[5] == 1
 
     def enter_control_mode(self):
-        msg = bytearray([0x55, 0x5, 0xA0, 0x00, 0xBB])
+        msg = bytearray([0xAA, 0x5, 0xA0, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
         self._send_message(msg)
 
-        if (in_control_mode := self.update_in_control_mode()) != 1:
+        self.update_in_control_mode()
+        print(self.in_control_mode)
+        if self.in_control_mode is not True:
             raise Exception("Enter control mode failed.")
-        self.in_control_mode = in_control_mode
 
     def exit_control_mode(self):
-        msg = bytearray([0x55, 0x5, 0xA1, 0x00, 0xBB])
+        msg = bytearray([0xAA, 0x5, 0xA1, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
         self._send_message(msg)
 
-        if (in_control_mode := self.update_in_control_mode()) != 0:
+        self.update_in_control_mode()
+        if self.in_control_mode is not False:
             raise Exception("Exit control mode failed.")
-        self.in_control_mode = in_control_mode
 
     def set_one_motor_pos(self, motor_id: int, pos: float):
         """set motor position singly
@@ -87,7 +96,7 @@ class AxoController:
 
         high_byte, low_byte = get_16bit(pos, 100)
 
-        msg = bytearray([0x55, 0x8, 0xA6, motor_id, high_byte, low_byte, 0x00, 0xBB])
+        msg = bytearray([0xAA, 0x8, 0xA6, motor_id, high_byte, low_byte, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
         self._send_message(msg)
 
@@ -106,7 +115,7 @@ class AxoController:
 
         byte_tuple = [get_16bit(i, 100) for i in pos]
 
-        msg = bytearray([0x55, 13, 0xA7])
+        msg = bytearray([0xAA, 13, 0xA7])
         for high_byte, low_byte in byte_tuple:
             msg += bytearray([high_byte, low_byte])
         msg += bytearray([0x00, 0xBB])
@@ -153,9 +162,7 @@ class AxoController:
         msg = bytearray([0xAA, 0x6, 0xA9, state_id, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
 
-        # TODO: confirm the number of times of send messages, maybe need move to _send_message
-        for i in range(1):
-            self._send_message(msg)
+        self._send_message(msg)
 
     def query(self):
         pass
@@ -174,9 +181,13 @@ class AxoController:
     def _recevice_info(self):
         while self.is_get_info:
             self.info_stack.extend(self._get_info())
+            print(len(self.info_stack))
 
             if len(self.info_stack) > self.info_stacksize:
                 self.info_stack = self.info_stack[-self.info_stacksize:]
+
+            # Provent the msg is too short, which will cannot be decoded.
+            time.sleep(0.005)
 
     def initial_check(self):
         self._check_commuintation()
@@ -186,16 +197,22 @@ class AxoController:
         self.change_communication_state("open")
 
         time.sleep(timeout)
-        robot_state = self._get_info()
-        robot_state = robot_state[-1]  # get the lastest info
+        if self.is_get_info:
+            robot_state = self.info_stack[-1]
+        else:
+            robot_state = self._get_info()[-1]
+
+        print(self.is_get_info, robot_state)
         assert robot_state[2] == 2, f"Cannot get robot state, current info_num is {robot_state[2]}"
 
         self.change_communication_state("close")
 
         time.sleep(timeout)
-        robot_state = self._get_info()
-        robot_state = robot_state[-1]  # get the lastest info
-        assert robot_state[2] in [0, 1], f"Cannnot get leg state, current info_num is {robot_state[2]}"
+        if self.is_get_info:
+            tmp = self.info_stack[-1]
+        else:
+            tmp = self._get_info()[-1]
+        assert tmp[2] in [0, 1], f"Cannnot get leg state, current info_num is {tmp[2]}"
 
         return robot_state
 
@@ -205,7 +222,7 @@ class AxoController:
             raise Exception(f"robot state is not normal, state: {robot_state}")
 
     def _check_commuintation(self):
-        time.sleep(1)
+        time.sleep(0.5)
 
         info = self._get_info()
         if len(info) == 0:
