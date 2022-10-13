@@ -9,39 +9,71 @@
 '''
 import serial
 import threading
+import time
 from utils import check_sum, get_16bit
 
 
 class AxoController:
 
-    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0.01):
+    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0):
         # Constant
         self._hip_limit = [-25, 95]      # degree
         self._knee_limit = [-100, 8]     # degree
         self._vel_limit = [-3000, 3000]  # rpm
         self._current_limit = [-15, 15]  # A
 
-        # Variable used for communication
+        # Establish serial connection
+        self.ser = serial.Serial(port, byterate, timeout=timeout)
+        assert self.ser.is_open is True
+
+        # Initial check
+        print("Checking the connection and robot state...")
+        self.initial_check()
+        print("The connection and robot state is fine.")
+
+        # Variable for control
+        self.control_mode = "pos"
+        self.in_control_mode = self.update_in_control_mode()
+        assert self.in_control_mode is False
+
+        # Variable for communication
         self.info_stack = []
         self.info_stacksize = 10000
         self.is_get_info = False
+        # self.open_receive_info()
 
-        self.ser = serial.Serial(port, byterate, timeout=timeout)
-        self.check_commuintation()
+    def __del__(self):
+        self.ser.close()
 
     def _send_message(self, msg: bytearray):
         assert msg[-2] == check_sum(msg)
-        self.ser.write(msg)
+        write_num = self.ser.write(msg)
+
+        print(write_num, len(msg))
+
+    def update_in_control_mode(self):
+        robot_state = self.get_robot_state()
+        assert robot_state[5] == robot_state[8] == robot_state[11] == robot_state[14]
+
+        return robot_state[5] == 1
 
     def enter_control_mode(self):
         msg = bytearray([0x55, 0x5, 0xA0, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
         self._send_message(msg)
 
+        if (in_control_mode := self.update_in_control_mode()) != 1:
+            raise Exception("Enter control mode failed.")
+        self.in_control_mode = in_control_mode
+
     def exit_control_mode(self):
         msg = bytearray([0x55, 0x5, 0xA1, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
         self._send_message(msg)
+
+        if (in_control_mode := self.update_in_control_mode()) != 0:
+            raise Exception("Exit control mode failed.")
+        self.in_control_mode = in_control_mode
 
     def set_one_motor_pos(self, motor_id: int, pos: float):
         """set motor position singly
@@ -120,7 +152,10 @@ class AxoController:
 
         msg = bytearray([0xAA, 0x6, 0xA9, state_id, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
-        self._send_message(msg)
+
+        # TODO: confirm the number of times of send messages, maybe need move to _send_message
+        for i in range(1):
+            self._send_message(msg)
 
     def query(self):
         pass
@@ -133,17 +168,59 @@ class AxoController:
 
     def close_receive_info(self):
         self.is_get_info = False
+        time.sleep(0.3)
+        assert self.receive_info_thread.is_alive() is False
 
     def _recevice_info(self):
         while self.is_get_info:
-            if self.ser.inWaiting():
-                self.stack += self.ser.read_all()
+            self.info_stack.extend(self._get_info())
 
-                if len(self.stack) > self.info_stacksize:
-                    self.stack = self.stack[-self.info_stacksize:]
+            if len(self.info_stack) > self.info_stacksize:
+                self.info_stack = self.info_stack[-self.info_stacksize:]
 
-    def check_commuintation(self):
-        for i in range(100):
-            if self.ser.inWaiting():
-                tmp = self.ser.read_all()
-                print(f"type is {type(tmp)}, \n {tmp}")
+    def initial_check(self):
+        self._check_commuintation()
+        self._check_robot_state()
+
+    def get_robot_state(self, timeout: int = 1):
+        self.change_communication_state("open")
+
+        time.sleep(timeout)
+        robot_state = self._get_info()
+        robot_state = robot_state[-1]  # get the lastest info
+        assert robot_state[2] == 2, f"Cannot get robot state, current info_num is {robot_state[2]}"
+
+        self.change_communication_state("close")
+
+        time.sleep(timeout)
+        robot_state = self._get_info()
+        robot_state = robot_state[-1]  # get the lastest info
+        assert robot_state[2] in [0, 1], f"Cannnot get leg state, current info_num is {robot_state[2]}"
+
+        return robot_state
+
+    def _check_robot_state(self):
+        robot_state = self.get_robot_state()[3]
+        if robot_state != 0:
+            raise Exception(f"robot state is not normal, state: {robot_state}")
+
+    def _check_commuintation(self):
+        time.sleep(1)
+
+        info = self._get_info()
+        if len(info) == 0:
+            raise Exception("Communication Error, there is no valid message in serial buffer")
+
+    def _get_info(self):
+        prefix = b'\xaa'
+        suffix = b'\xbb'
+        info_size = 21
+
+        info = self.ser.read_all()
+        info = info.split(prefix)
+        info = [prefix + i for i in info if len(i) == info_size - 1]
+        info = [i for i in info if i[-2] == check_sum(i)]
+
+        valid_info = [i for i in info if i.endswith(suffix)]
+
+        return valid_info
