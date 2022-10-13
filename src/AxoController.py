@@ -8,6 +8,7 @@
 @Desc    :   AxoController
 '''
 import serial
+import threading
 from utils import check_sum, get_16bit
 
 
@@ -20,7 +21,10 @@ class AxoController:
         self._vel_limit = [-3000, 3000]  # rpm
         self._current_limit = [-15, 15]  # A
 
+        # Variable used for communication
         self.info_stack = []
+        self.info_stacksize = 10000
+        self.is_get_info = False
 
         self.ser = serial.Serial(port, byterate, timeout=timeout)
         self.check_commuintation()
@@ -121,8 +125,22 @@ class AxoController:
     def query(self):
         pass
 
-    def recevice_info(self):
-        pass
+    def open_receive_info(self):
+        self.is_get_info = True
+        self.receive_info_thread = threading.Thread(target=self._recevice_info)
+        self.receive_info_thread.setDaemon(True)
+        self.receive_info_thread.start()
+
+    def close_receive_info(self):
+        self.is_get_info = False
+
+    def _recevice_info(self):
+        while self.is_get_info:
+            if self.ser.inWaiting():
+                self.stack += self.ser.read_all()
+
+                if len(self.stack) > self.info_stacksize:
+                    self.stack = self.stack[-self.info_stacksize:]
 
     def check_commuintation(self):
         for i in range(100):
