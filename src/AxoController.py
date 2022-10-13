@@ -20,7 +20,10 @@ class AxoController:
         self._vel_limit = [-3000, 3000]  # rpm
         self._current_limit = [-15, 15]  # A
 
+        self.info_stack = []
+
         self.ser = serial.Serial(port, byterate, timeout=timeout)
+        self.check_commuintation()
 
     def _send_message(self, msg: bytearray):
         assert msg[-2] == check_sum(msg)
@@ -118,5 +121,11 @@ class AxoController:
     def query(self):
         pass
 
-    def test_commuintation(self):
+    def recevice_info(self):
         pass
+
+    def check_commuintation(self):
+        for i in range(100):
+            if self.ser.inWaiting():
+                tmp = self.ser.read_all()
+                print(f"type is {type(tmp)}, \n {tmp}")
