@@ -10,6 +10,7 @@
 import serial
 import threading
 import time
+import numpy as np
 from utils import check_sum, from_16bit_to_int, from_int_to_16bit
 
 
@@ -140,7 +141,7 @@ class AxoController:
 
     def enter_control_mode(self):
         if self.control_target == "all":
-            self.set_all_motors_pos(pos=[0, 0, 0, 0])
+            self.set_all_motors_pos_async(pos=[0, 0, 0, 0])
         else:
             self.set_one_motor_pos(motor_id=self.motor_name2id(self.control_target), pos=0)
 
@@ -198,7 +199,7 @@ class AxoController:
         msg[-2] = check_sum(msg)
         self._send_message(msg)
 
-    def set_all_motors_pos(self, pos: list) -> None:
+    def set_all_motors_pos_async(self, pos: list) -> None:
         """set all motor position
 
         Args:
@@ -220,6 +221,20 @@ class AxoController:
         msg += bytearray([0x00, 0xBB])
         msg[-2] = check_sum(msg)
         self._send_message(msg)
+
+    def set_all_motors_pos_sync(self, pos: list[int]) -> None:
+        self.set_all_motors_pos_async(pos)
+
+        while self._angle_norm(self.get_leg_info(), pos) > 0.1:
+            time.sleep(0.05)
+
+    def _angle_norm(self, leg_info: dict, pos: list[int]) -> float:
+        left_hip = leg_info["left"]["hip_pos"]
+        left_knee = leg_info["left"]["knee_pos"]
+        right_hip = leg_info["right"]["hip_pos"]
+        right_knee = leg_info["right"]["knee_pos"]
+
+        return np.linalg.norm(np.array([left_hip, left_knee, right_hip, right_knee]) - np.array(pos))
 
     def _set_one_motor_vel(self, motor_id: int, vel: int):
         pass
@@ -292,7 +307,49 @@ class AxoController:
         self._check_commuintation()
         self._check_robot_state()
 
-    def get_robot_state(self, timeout: int = 0.01):
+    def _process_leg_info(self, leg_info: bytes) -> dict:
+        hip_current = from_16bit_to_int(leg_info[3], leg_info[4], 1 / self._current_factor)
+        hip_vel = from_16bit_to_int(leg_info[5], leg_info[6], 1 / self._vel_upload_factor)
+        hip_pos_incre = from_16bit_to_int(leg_info[7], leg_info[8], 1 / self._pos_factor)  # the increamental encoder value
+        hip_pos_abs = from_16bit_to_int(leg_info[9], leg_info[10], 1 / self._pos_factor)  # the absolute encoder value
+        assert abs(hip_pos_incre - hip_pos_abs) < 3, f"hip_pos_incre: {hip_pos_incre}, hip_pos_abs: {hip_pos_abs}"
+
+        knee_current = from_16bit_to_int(leg_info[11], leg_info[12], 1 / self._current_factor)
+        knee_vel = from_16bit_to_int(leg_info[13], leg_info[14], 1 / self._vel_upload_factor)
+        knee_pos_incre = from_16bit_to_int(leg_info[15], leg_info[16], 1 / self._pos_factor)
+        knee_pos_abs = from_16bit_to_int(leg_info[17], leg_info[18], 1 / self._pos_factor)
+        assert abs(knee_pos_incre - knee_pos_abs) < 3, f"knee_pos_incre: {knee_pos_incre}, knee_pos_abs: {knee_pos_abs}"
+
+        return {
+            "hip_current": hip_current,
+            "hip_vel": hip_vel,
+            "hip_pos": hip_pos_incre,
+            "knee_current": knee_current,
+            "knee_vel": knee_vel,
+            "knee_pos": knee_pos_incre,
+        }
+
+    def get_leg_info(self):
+        has_left_leg_info = False
+        has_right_leg_info = False
+
+        for info in reversed(self.info_stack):
+            if has_left_leg_info and has_right_leg_info:
+                break
+
+            if info[2] == 0x01:
+                has_right_leg_info = True
+                leg_info = self._process_leg_info(info)
+            elif info[2] == 0x00:
+                has_left_leg_info = True
+                right_info = self._process_leg_info(info)
+
+        else:  # Be Careful, this branch will be executed if the for loop is not breaked.
+            raise Exception(f"Cannot get leg info. has_left_leg_info: {has_left_leg_info}, has_right_leg_info: {has_right_leg_info}")
+
+        return {"left": leg_info, "right": right_info}
+
+    def get_robot_state(self, timeout: int = 0.05):
         self.change_communication_state("open")
 
         time.sleep(timeout)

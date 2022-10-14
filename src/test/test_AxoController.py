@@ -40,11 +40,20 @@ class TestAxoController(unittest.TestCase):
         axo_ctrl = AxoController(port=self.port)
         axo_ctrl.enter_control_mode()
 
-        axo_ctrl.set_all_motors_pos([20, 0, 20, 0])
-        time.sleep(5)
-        axo_ctrl.set_all_motors_pos([20, -20, 20, -20])
-        time.sleep(5)
+        print(start_time := time.time())
+        for i in range(20):
+            axo_ctrl.set_all_motors_pos_sync([i, 0, i, 0])
+            print(i, time.time() - start_time)
+
         axo_ctrl.exit_control_mode()
+        axo_ctrl.close_controller()
+
+    def test_get_leg_info(self):
+        axo_ctrl = AxoController(port=self.port)
+
+        time.sleep(1)
+        print(axo_ctrl.get_leg_info())
+
         axo_ctrl.close_controller()
 
 
