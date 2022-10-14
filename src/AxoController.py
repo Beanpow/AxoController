@@ -310,7 +310,7 @@ class AxoController:
     def _check_robot_state(self):
         robot_state = self.get_robot_state()[3]
         if robot_state != 0:
-            raise Exception(f"robot state is not normal, state: {robot_state}")
+            raise Exception(f"robot state is abnormal, state: {robot_state}")
 
     def _check_commuintation(self):
         time.sleep(0.5)
