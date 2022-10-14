@@ -35,8 +35,12 @@ class AxoController:
         self.dangerous_cmds = [0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7]
 
         # Establish serial connection
-        self.ser = serial.Serial(port, byterate, timeout=timeout)
-        assert self.ser.is_open is True
+        try:
+            self.ser = serial.Serial(port, byterate, timeout=timeout)
+            assert self.ser.is_open is True
+        except Exception as e:
+            print(f"[error]: {e}")
+            exit(1)
         self.verbose = verbose
 
         # Initial check
@@ -59,9 +63,13 @@ class AxoController:
         self.open_receive_info()
 
     def __del__(self):
+        self.close_controller()
+
+    def close_controller(self):
         if self.is_get_info:
             self.close_receive_info()
-        self.ser.close()
+        if hasattr(self, 'ser') and self.ser.is_open:
+            self.ser.close()
 
     def _send_message(self, msg: bytearray):
         if self.verbose:
@@ -115,7 +123,6 @@ class AxoController:
 
                 knee_l = from_16bit_to_int(msg[5], msg[6], 1 / self._pos_factor)
                 knee_r = from_16bit_to_int(msg[9], msg[10], 1 / self._pos_factor)
-                print(hip_l, hip_r, knee_l, knee_r)
 
                 assert self._hip_limit[0] <= hip_l <= self._hip_limit[1]
                 assert self._hip_limit[0] <= hip_r <= self._hip_limit[1]
@@ -285,7 +292,7 @@ class AxoController:
         self._check_commuintation()
         self._check_robot_state()
 
-    def get_robot_state(self, timeout: int = 1):
+    def get_robot_state(self, timeout: int = 0.01):
         self.change_communication_state("open")
 
         time.sleep(timeout)
