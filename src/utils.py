@@ -20,7 +20,7 @@ def check_sum(msg: bytearray) -> int:
     return sum
 
 
-def get_16bit(value: Union[int, float], factor: int = 1) -> tuple[int, int]:
+def from_int_to_16bit(value: Union[int, float], factor: int = 1) -> tuple[int, int]:
     """get value * factor's high byte and low byte
 
     Args:
@@ -32,7 +32,28 @@ def get_16bit(value: Union[int, float], factor: int = 1) -> tuple[int, int]:
     """
     value = int(value * factor)
 
+    value &= 0xFFFF
     high_byte = value >> 8
     low_byte = value & 0xFF
 
     return high_byte, low_byte
+
+
+def from_16bit_to_int(high_byte: int, low_byte: int, factor: float) -> float:
+    """get int from high byte and low byte
+
+    Args:
+        high_byte (int): high byte
+        low_byte (int): low byte
+        factor (int): factor
+
+    Returns:
+        int: int value
+    """
+    byte16 = (high_byte << 8) | low_byte
+    if byte16 & 0x8000:
+        byte16 ^= 0xFFFF
+        byte16 += 1
+        byte16 *= -1
+
+    return byte16 * factor
