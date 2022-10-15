@@ -10,7 +10,7 @@
 from typing import Union
 
 
-def check_sum(msg: bytearray) -> int:
+def check_sum(msg: Union[bytearray, bytes]) -> int:
     assert len(msg) >= 5
 
     sum = msg[1]

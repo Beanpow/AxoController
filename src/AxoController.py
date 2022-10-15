@@ -11,12 +11,15 @@ import serial
 import threading
 import time
 import numpy as np
-from typing import Union
+from typing import Union, List, Tuple
 from utils import check_sum, from_16bit_to_int, from_int_to_16bit
 
 
+LegInfoType = Tuple[float, float, float, float]
+
+
 class AxoController:
-    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: list[int] = [20, 30, 20, 5], verbose: bool = False):
+    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: List[int] = [20, 30, 20, 5], verbose: bool = False):
         # Constant
         self._hip_limit = [-25, 95]  # degree
         self._knee_limit = [-100, 8]  # degree
@@ -160,7 +163,7 @@ class AxoController:
 
             if cmd == 0xA3:  # current
                 for byte in zip(msg[3:11:2], msg[4:11:2]):
-                    cmd_value = from_16bit_to_int(*byte, 1 / self.current_factor)
+                    cmd_value = from_16bit_to_int(*byte, 1 / self._current_factor)
                     assert self._current_limit[0] <= cmd_value <= self._current_limit[1]
 
             elif cmd == 0xA5:  # velocity control
@@ -264,13 +267,16 @@ class AxoController:
         msg[-2] = check_sum(msg)
         self._send_message(msg)
 
-    def set_all_motors_pos_sync(self, pos: list[int]) -> None:
+    def set_all_motors_pos_vel_based(self, pos: List[float]) -> None:
+        pass
+
+    def set_all_motors_pos_sync(self, pos: List[float]) -> None:
         self.set_all_motors_pos_async(pos)
 
         while self._angle_norm(self.get_leg_pos(), pos) > 0.1:
             time.sleep(0.05)
 
-    def get_leg_pos(self) -> tuple[float]:
+    def get_leg_pos(self) -> LegInfoType:
         leg_info = self.get_leg_info()
         left_hip = leg_info["left"]["hip_pos"]
         left_knee = leg_info["left"]["knee_pos"]
@@ -278,7 +284,7 @@ class AxoController:
         right_knee = leg_info["right"]["knee_pos"]
         return left_hip, left_knee, right_hip, right_knee
 
-    def get_leg_vel(self) -> tuple[float]:
+    def get_leg_vel(self) -> LegInfoType:
         leg_info = self.get_leg_info()
         left_hip = leg_info["left"]["hip_vel"]
         left_knee = leg_info["left"]["knee_vel"]
@@ -286,8 +292,8 @@ class AxoController:
         right_knee = leg_info["right"]["knee_vel"]
         return left_hip, left_knee, right_hip, right_knee
 
-    def _angle_norm(self, pos1: Union[list[int], tuple[int]], pos2: Union[list[int], tuple[int]]) -> float:
-        return np.linalg.norm(np.array(pos1) - np.array(pos2))
+    def _angle_norm(self, pos1: Union[List[float], LegInfoType], pos2: Union[List[float], LegInfoType]) -> float:
+        return np.linalg.norm(np.array(pos1) - np.array(pos2))  # type: ignore
 
     def set_one_motor_vel(self, motor_id: int, vel: int):
         assert self.control_mode == "velocity"
@@ -406,14 +412,16 @@ class AxoController:
             "knee_pos": knee_pos_incre,
         }
 
-    def get_leg_info(self):
+    def get_leg_info(self) -> dict:
         has_left_leg_info = False
         has_right_leg_info = False
+        left_info = None
+        right_info = None
 
         for info in reversed(self.info_stack):
             if info[2] == 0x01:
                 has_right_leg_info = True
-                leg_info = self._process_leg_info(info)
+                left_info = self._process_leg_info(info)
             elif info[2] == 0x00:
                 has_left_leg_info = True
                 right_info = self._process_leg_info(info)
@@ -424,9 +432,9 @@ class AxoController:
         else:  # Be Careful, this branch will be executed if the for loop is not breaked.
             raise Exception(f"Cannot get leg info. has_left_leg_info: {has_left_leg_info}, has_right_leg_info: {has_right_leg_info}")
 
-        return {"left": leg_info, "right": right_info}
+        return {"left": left_info, "right": right_info}
 
-    def get_robot_state(self, timeout: int = 0.1) -> bytes:
+    def get_robot_state(self, timeout: float = 0.1) -> bytes:
         self.change_communication_state("open")
 
         time.sleep(timeout)
@@ -466,6 +474,7 @@ class AxoController:
         info_size = 21
 
         info = self.ser.read_all()
+        assert info is not None
         info = info.split(prefix)
         info = [prefix + i for i in info if len(i) == info_size - 1]
         info = [i for i in info if i[-2] == check_sum(i)]
