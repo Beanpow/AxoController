@@ -15,17 +15,16 @@ from utils import check_sum, from_16bit_to_int, from_int_to_16bit
 
 
 class AxoController:
-
     def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, verbose: bool = False):
         # Constant
-        self._hip_limit = [-25, 95]      # degree
-        self._knee_limit = [-100, 8]     # degree
+        self._hip_limit = [-25, 95]  # degree
+        self._knee_limit = [-100, 8]  # degree
         self._vel_limit = [-3000, 3000]  # rpm
         self._current_limit = [-15, 15]  # A
-        self._pos_factor = 100           # the pos will be multiplied by this factor
-        self._current_factor = 100       # the current will be multiplied by this factor
-        self._vel_download_factor = 1    # the vel will be multiplied by this factor when download to the robot
-        self._vel_upload_factor = 10     # the vel will be multiplied by this factor when upload from the robot
+        self._pos_factor = 100  # the pos will be multiplied by this factor
+        self._current_factor = 100  # the current will be multiplied by this factor
+        self._vel_download_factor = 1  # the vel will be multiplied by this factor when download to the robot
+        self._vel_upload_factor = 10  # the vel will be multiplied by this factor when upload from the robot
 
         # Variable for communication
         self.info_stack = []
@@ -155,22 +154,12 @@ class AxoController:
 
     def motor_name2id(self, motor_name: str) -> int:
         assert motor_name in ["left_hip", "left_knee", "right_hip", "right_knee"]
-        motor_name2id = {
-            "left_hip": 0,
-            "left_knee": 1,
-            "right_hip": 3,
-            "right_knee": 4
-        }
+        motor_name2id = {"left_hip": 0, "left_knee": 1, "right_hip": 3, "right_knee": 4}
         return motor_name2id[motor_name]
 
     def motor_id2name(self, motor_id: int) -> str:
         assert motor_id in [0, 1, 3, 4]
-        motor_id2name = {
-            0: "left_hip",
-            1: "left_knee",
-            3: "right_hip",
-            4: "right_knee"
-        }
+        motor_id2name = {0: "left_hip", 1: "left_knee", 3: "right_hip", 4: "right_knee"}
         return motor_id2name[motor_id]
 
     def exit_control_mode(self):
@@ -298,7 +287,7 @@ class AxoController:
             self.info_stack.extend(self._get_info())
 
             if len(self.info_stack) > self.info_stacksize:
-                self.info_stack = self.info_stack[-self.info_stacksize:]
+                self.info_stack = self.info_stack[-self.info_stacksize :]
 
             # Provent the msg is too short, which will cannot be decoded.
             time.sleep(0.005)
