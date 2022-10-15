@@ -93,17 +93,20 @@ class AxoController:
             if self.verbose:
                 print(f"[info]: left_hip: {left_hip}, left_knee: {left_knee}, right_hip: {right_hip}, right_knee: {right_knee}")
 
-            if (
-                left_hip < self._hip_limit[0]
-                or left_hip > self._hip_limit[1]
-                or right_hip < self._hip_limit[0]
-                or right_hip > self._hip_limit[1]
-                or left_knee < self._knee_limit[0]
-                or left_knee > self._knee_limit[1]
-                or right_knee < self._knee_limit[0]
-                or right_knee > self._knee_limit[1]
-            ):
-                print("[fatal]: Angle is out of limit, stop the robot.")
+            if left_hip < self._hip_limit[0] or left_hip > self._hip_limit[1]:
+                print(f"[fatal]: left_hip: {left_hip} is out of limit: {self._hip_limit}")
+                self.exit_control_mode()
+
+            if left_knee < self._knee_limit[0] or left_knee > self._knee_limit[1]:
+                print(f"[fatal]: left_knee: {left_knee} is out of limit: {self._knee_limit}")
+                self.exit_control_mode()
+
+            if right_hip < self._hip_limit[0] or right_hip > self._hip_limit[1]:
+                print(f"[fatal]: right_hip: {right_hip} is out of limit: {self._hip_limit}")
+                self.exit_control_mode()
+
+            if right_knee < self._knee_limit[0] or right_knee > self._knee_limit[1]:
+                print(f"[fatal]: right_knee: {right_knee} is out of limit: {self._knee_limit}")
                 self.exit_control_mode()
 
     def close_controller(self):
@@ -129,7 +132,7 @@ class AxoController:
         assert write_num == len(msg)
 
     def _cmd_check(self, msg):
-        cmd = msg[2]
+        assert (cmd := msg[2]) in self.dangerous_cmds
 
         if cmd in self.dangerous_cmds[0:6:2]:  # single control
             motor_name = self.motor_id2name(msg[3])
@@ -183,9 +186,16 @@ class AxoController:
 
         self.in_control_mode = robot_state[5] == 1
 
-    def enter_control_mode(self):
+    def enter_control_mode(self, control_mode: str) -> None:
+        assert control_mode in ["current", "velocity", "position"]
+
         if self.control_target == "all":
-            self.set_all_motors_pos_async(pos=[0, 0, 0, 0])
+            if control_mode == "position":
+                self.set_all_motors_pos_async(pos=[0, 0, 0, 0])
+            elif control_mode == "velocity":
+                self.set_all_motors_vel(vel=[0, 0, 0, 0])
+            else:  # current
+                self.set_all_motor_current(current=[0, 0, 0, 0])
         else:
             self.set_one_motor_pos(motor_id=self.motor_name2id(self.control_target), pos=0)
 

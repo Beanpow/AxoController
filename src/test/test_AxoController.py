@@ -31,7 +31,7 @@ class TestAxoController(unittest.TestCase):
 
     def test_enter_exit_control_mode(self):
         axo_ctrl = AxoController(port=self.port)
-        axo_ctrl.enter_control_mode()
+        axo_ctrl.enter_control_mode("position")
         self.assertTrue(axo_ctrl.in_control_mode)
         axo_ctrl.exit_control_mode()
         self.assertFalse(axo_ctrl.in_control_mode)
@@ -39,7 +39,7 @@ class TestAxoController(unittest.TestCase):
 
     def test_set_all_motor_pos(self):
         axo_ctrl = AxoController(port=self.port)
-        axo_ctrl.enter_control_mode()
+        axo_ctrl.enter_control_mode("position")
 
         print(start_time := time.time())
         for i in range(20):
@@ -59,7 +59,7 @@ class TestAxoController(unittest.TestCase):
 
     def test_set_all_motors_vel(self):
         axo = AxoController(port=self.port)
-        axo.enter_control_mode()
+        axo.enter_control_mode("velocity")
 
         axo.set_all_motors_vel([10, -10, 10, 10])
         left_hip, left_knee, right_hip, right_knee = axo.get_leg_vel()
