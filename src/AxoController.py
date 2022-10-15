@@ -15,7 +15,7 @@ from utils import check_sum, from_16bit_to_int, from_int_to_16bit
 
 
 class AxoController:
-    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: list[int, int, int, int] = [20, 30, 20, 5], verbose: bool = False):
+    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: list[int] = [20, 30, 20, 5], verbose: bool = False):
         # Constant
         self._hip_limit = [-25, 95]  # degree
         self._knee_limit = [-100, 8]  # degree
@@ -69,6 +69,7 @@ class AxoController:
         self.open_receive_info()
 
         # Angle detection thread
+        time.sleep(0.05)  # wait for the info thread to start
         self.open_angle_detection()
 
     def __del__(self):
@@ -83,12 +84,14 @@ class AxoController:
     def close_angle_detection(self) -> None:
         self.is_angle_detection = False
         time.sleep(0.3)
-        assert self.angle_detection_thread.is_alive() is True
+        assert self.angle_detection_thread.is_alive() is False
 
     def _angle_detection(self) -> None:
         while self.is_angle_detection:
             leg_info = self.get_leg_info()
             left_hip, left_knee, right_hip, right_knee = self._get_pos_from_leg_info(leg_info)
+            if self.verbose:
+                print(f"[info]: left_hip: {left_hip}, left_knee: {left_knee}, right_hip: {right_hip}, right_knee: {right_knee}")
 
             if (
                 left_hip < self._hip_limit[0]
@@ -100,8 +103,8 @@ class AxoController:
                 or right_knee < self._knee_limit[0]
                 or right_knee > self._knee_limit[1]
             ):
-                self.close_controller()
-                raise Exception("Angle is out of limit.")
+                print("[fatal]: Angle is out of limit, stop the robot.")
+                self.exit_control_mode()
 
     def close_controller(self):
         if self.in_control_mode:
@@ -259,7 +262,7 @@ class AxoController:
         while self._angle_norm(self.get_leg_info(), pos) > 0.1:
             time.sleep(0.05)
 
-    def _get_pos_from_leg_info(self, leg_info: dict) -> tuple(float, float, float, float):
+    def _get_pos_from_leg_info(self, leg_info: dict) -> tuple[float]:
         left_hip = leg_info["left"]["hip_pos"]
         left_knee = leg_info["left"]["knee_pos"]
         right_hip = leg_info["right"]["hip_pos"]
@@ -368,15 +371,15 @@ class AxoController:
         has_right_leg_info = False
 
         for info in reversed(self.info_stack):
-            if has_left_leg_info and has_right_leg_info:
-                break
-
             if info[2] == 0x01:
                 has_right_leg_info = True
                 leg_info = self._process_leg_info(info)
             elif info[2] == 0x00:
                 has_left_leg_info = True
                 right_info = self._process_leg_info(info)
+
+            if has_left_leg_info and has_right_leg_info:
+                break
 
         else:  # Be Careful, this branch will be executed if the for loop is not breaked.
             raise Exception(f"Cannot get leg info. has_left_leg_info: {has_left_leg_info}, has_right_leg_info: {has_right_leg_info}")
