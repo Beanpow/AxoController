@@ -11,6 +11,7 @@ import serial
 import threading
 import time
 import numpy as np
+from typing import Union
 from utils import check_sum, from_16bit_to_int, from_int_to_16bit
 
 
@@ -88,8 +89,7 @@ class AxoController:
 
     def _angle_detection(self) -> None:
         while self.is_angle_detection:
-            leg_info = self.get_leg_info()
-            left_hip, left_knee, right_hip, right_knee = self._get_pos_from_leg_info(leg_info)
+            left_hip, left_knee, right_hip, right_knee = self.get_leg_pos()
             if self.verbose:
                 print(f"[info]: left_hip: {left_hip}, left_knee: {left_knee}, right_hip: {right_hip}, right_knee: {right_knee}")
 
@@ -259,31 +259,57 @@ class AxoController:
     def set_all_motors_pos_sync(self, pos: list[int]) -> None:
         self.set_all_motors_pos_async(pos)
 
-        while self._angle_norm(self.get_leg_info(), pos) > 0.1:
+        while self._angle_norm(self.get_leg_pos(), pos) > 0.1:
             time.sleep(0.05)
 
-    def _get_pos_from_leg_info(self, leg_info: dict) -> tuple[float]:
+    def get_leg_pos(self) -> tuple[float]:
+        leg_info = self.get_leg_info()
         left_hip = leg_info["left"]["hip_pos"]
         left_knee = leg_info["left"]["knee_pos"]
         right_hip = leg_info["right"]["hip_pos"]
         right_knee = leg_info["right"]["knee_pos"]
         return left_hip, left_knee, right_hip, right_knee
 
-    def _angle_norm(self, leg_info: dict, pos: list[int]) -> float:
-        left_hip, left_knee, right_hip, right_knee = self._get_pos_from_leg_info(leg_info)
-        return np.linalg.norm(np.array([left_hip, left_knee, right_hip, right_knee]) - np.array(pos))
+    def get_leg_vel(self) -> tuple[float]:
+        leg_info = self.get_leg_info()
+        left_hip = leg_info["left"]["hip_vel"]
+        left_knee = leg_info["left"]["knee_vel"]
+        right_hip = leg_info["right"]["hip_vel"]
+        right_knee = leg_info["right"]["knee_vel"]
+        return left_hip, left_knee, right_hip, right_knee
 
-    def _set_one_motor_vel(self, motor_id: int, vel: int):
-        pass
+    def _angle_norm(self, pos1: Union[list[int], tuple[int]], pos2: Union[list[int], tuple[int]]) -> float:
+        return np.linalg.norm(np.array(pos1) - np.array(pos2))
 
-    def _set_all_motors_vel(self, vel: list):
-        pass
+    def set_one_motor_vel(self, motor_id: int, vel: int):
+        raise NotImplementedError
 
-    def _set_one_motor_current(self, motor_id: int, current: int):
-        pass
+    def set_all_motors_vel(self, vel: list):
+        """set all motor position
 
-    def _set_all_motor_current(self, current: list):
-        pass
+        Args:
+            vel (list): the desire position of all motors, unit: rpm,
+                        order: [left hip, left knee, right hip, right knee]
+        """
+        assert self.control_target == "all"
+        assert len(vel) == 4
+        for v in vel:
+            assert self._vel_limit[0] <= v <= self._vel_limit[1]
+
+        byte_tuple = [from_int_to_16bit(i, self._vel_download_factor) for i in vel]
+
+        msg = bytearray([0xAA, 13, 0xA5])
+        for high_byte, low_byte in byte_tuple:
+            msg += bytearray([high_byte, low_byte])
+        msg += bytearray([0x00, 0xBB])
+        msg[-2] = check_sum(msg)
+        self._send_message(msg)
+
+    def set_one_motor_current(self, motor_id: int, current: int):
+        raise NotImplementedError
+
+    def set_all_motor_current(self, current: list):
+        raise NotImplementedError
 
     def change_control_mode(self, mode: str):
         assert mode in ["pos", "vel", "current"]
