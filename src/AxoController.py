@@ -15,10 +15,15 @@ from utils import check_sum, from_16bit_to_int, from_int_to_16bit
 
 
 class AxoController:
-    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, verbose: bool = False):
+    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: list[int, int, int, int] = [20, 30, 20, 5], verbose: bool = False):
         # Constant
         self._hip_limit = [-25, 95]  # degree
         self._knee_limit = [-100, 8]  # degree
+        self._hip_limit[0] += angle_telorance[0]
+        self._hip_limit[1] -= angle_telorance[1]
+        self._knee_limit[0] += angle_telorance[2]
+        self._knee_limit[1] -= angle_telorance[3]
+        assert self._hip_limit[0] < self._hip_limit[1] and self._knee_limit[0] < self._knee_limit[1], "Angle telorance is too large."
         self._vel_limit = [-3000, 3000]  # rpm
         self._current_limit = [-15, 15]  # A
         self._pos_factor = 100  # the pos will be multiplied by this factor
@@ -60,14 +65,51 @@ class AxoController:
             self.update_in_control_mode()
         assert self.in_control_mode is False, "The robot is in control mode, exit control mode first."
 
+        # Receive info thread
         self.open_receive_info()
+
+        # Angle detection thread
+        self.open_angle_detection()
 
     def __del__(self):
         self.close_controller()
 
+    def open_angle_detection(self) -> None:
+        self.is_angle_detection = True
+        self.angle_detection_thread = threading.Thread(target=self._angle_detection)
+        self.angle_detection_thread.setDaemon(True)
+        self.angle_detection_thread.start()
+
+    def close_angle_detection(self) -> None:
+        self.is_angle_detection = False
+        time.sleep(0.3)
+        assert self.angle_detection_thread.is_alive() is True
+
+    def _angle_detection(self) -> None:
+        while self.is_angle_detection:
+            leg_info = self.get_leg_info()
+            left_hip, left_knee, right_hip, right_knee = self._get_pos_from_leg_info(leg_info)
+
+            if (
+                left_hip < self._hip_limit[0]
+                or left_hip > self._hip_limit[1]
+                or right_hip < self._hip_limit[0]
+                or right_hip > self._hip_limit[1]
+                or left_knee < self._knee_limit[0]
+                or left_knee > self._knee_limit[1]
+                or right_knee < self._knee_limit[0]
+                or right_knee > self._knee_limit[1]
+            ):
+                self.close_controller()
+                raise Exception("Angle is out of limit.")
+
     def close_controller(self):
+        if self.in_control_mode:
+            self.exit_control_mode()
         if self.is_get_info:
             self.close_receive_info()
+        if self.is_angle_detection:
+            self.close_angle_detection()
         if hasattr(self, 'ser') and self.ser.is_open:
             self.ser.close()
 
@@ -217,12 +259,15 @@ class AxoController:
         while self._angle_norm(self.get_leg_info(), pos) > 0.1:
             time.sleep(0.05)
 
-    def _angle_norm(self, leg_info: dict, pos: list[int]) -> float:
+    def _get_pos_from_leg_info(self, leg_info: dict) -> tuple(float, float, float, float):
         left_hip = leg_info["left"]["hip_pos"]
         left_knee = leg_info["left"]["knee_pos"]
         right_hip = leg_info["right"]["hip_pos"]
         right_knee = leg_info["right"]["knee_pos"]
+        return left_hip, left_knee, right_hip, right_knee
 
+    def _angle_norm(self, leg_info: dict, pos: list[int]) -> float:
+        left_hip, left_knee, right_hip, right_knee = self._get_pos_from_leg_info(leg_info)
         return np.linalg.norm(np.array([left_hip, left_knee, right_hip, right_knee]) - np.array(pos))
 
     def _set_one_motor_vel(self, motor_id: int, vel: int):

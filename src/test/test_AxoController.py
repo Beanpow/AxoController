@@ -57,6 +57,14 @@ class TestAxoController(unittest.TestCase):
 
         axo_ctrl.close_controller()
 
+    def test_angle_detection(self):
+        axo_ctrl = AxoController(port=self.port, angle_telorance=[20, 60, 80, 5])
+
+        axo_ctrl.set_all_motors_pos_sync([10, 0, 10, 0])
+
+        with self.assertRaises(Exception):
+            axo_ctrl.set_all_motors_pos_sync([40, -30, 40, -30])
+
 
 if __name__ == "__main__":
     unittest.main()
