@@ -62,22 +62,31 @@ class TestAxoController(unittest.TestCase):
         axo.enter_control_mode()
         axo.change_control_mode("velocity")
 
-        axo.set_all_motors_vel([10, -10, 10, 10])
-        left_hip, left_knee, right_hip, right_knee = axo.get_leg_vel()
-        self.assertLess(abs(left_hip - 10), 0.1)
-        self.assertLess(abs(left_knee + 10), 0.1)
-        self.assertLess(abs(right_hip - 10), 0.1)
-        self.assertLess(abs(right_knee + 10), 0.1)
+        vel_list = [10, -10, 10, -10]
+        axo.set_all_motors_vel(vel_list)
+        for i in range(100):
+            left_hip, left_knee, right_hip, right_knee = axo.get_leg_vel()
+            print(left_hip, left_knee, right_hip, right_knee)
+            time.sleep(0.1)
+
+        self.assertLess(abs(left_hip - vel_list[0]), 0.1)
+        self.assertLess(abs(left_knee - vel_list[1]), 0.1)
+        self.assertLess(abs(right_hip - vel_list[2]), 0.1)
+        self.assertLess(abs(right_knee - vel_list[3]), 0.1)
 
         axo.exit_control_mode()
         axo.close_controller()
 
     def test_angle_detection(self):
         axo_ctrl = AxoController(port=self.port, angle_telorance=[20, 60, 80, 5])
+        axo_ctrl.enter_control_mode()
+        axo_ctrl.change_control_mode("velocity")
 
         with self.assertRaises(Exception):
-            axo_ctrl.set_all_motors_vel([10, -10, 10, 10])
+            axo_ctrl.set_all_motors_vel([10, -10, 10, -10])
+            time.sleep(10)
 
+        axo_ctrl.exit_control_mode()
         axo_ctrl.close_controller()
 
 

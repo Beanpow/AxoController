@@ -37,6 +37,9 @@ class AxoController:
         self.info_stacksize = 10000
         self.is_get_info = False
 
+        # Variable for angle detection
+        self.is_angle_detection = False
+
         # Variable for safe control
         self.dangerous_cmds = [0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7]
 
@@ -396,10 +399,10 @@ class AxoController:
 
         return {
             "hip_current": hip_current,
-            "hip_vel": hip_vel,
+            "hip_vel": hip_vel if leg_info[2] == 0 else -hip_vel,  # Due to the encoder direction, right leg is opposite to left leg
             "hip_pos": hip_pos_incre,
             "knee_current": knee_current,
-            "knee_vel": knee_vel,
+            "knee_vel": knee_vel if leg_info[2] == 0 else -knee_vel,  # Due to the encoder direction, right leg is opposite to left leg
             "knee_pos": knee_pos_incre,
         }
 
@@ -423,7 +426,7 @@ class AxoController:
 
         return {"left": leg_info, "right": right_info}
 
-    def get_robot_state(self, timeout: int = 0.05) -> bytes:
+    def get_robot_state(self, timeout: int = 0.1) -> bytes:
         self.change_communication_state("open")
 
         time.sleep(timeout)
