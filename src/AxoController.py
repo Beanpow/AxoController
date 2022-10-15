@@ -57,7 +57,7 @@ class AxoController:
             print("[info]: The connection and robot state is fine.")
 
         # Variable for control
-        self.control_mode = "pos"
+        self.control_mode = "position"
         self.control_target = "all"
         self.in_control_mode = False
         self.update_in_control_mode()
@@ -186,16 +186,9 @@ class AxoController:
 
         self.in_control_mode = robot_state[5] == 1
 
-    def enter_control_mode(self, control_mode: str) -> None:
-        assert control_mode in ["current", "velocity", "position"]
-
+    def enter_control_mode(self) -> None:
         if self.control_target == "all":
-            if control_mode == "position":
-                self.set_all_motors_pos_async(pos=[0, 0, 0, 0])
-            elif control_mode == "velocity":
-                self.set_all_motors_vel(vel=[0, 0, 0, 0])
-            else:  # current
-                self.set_all_motor_current(current=[0, 0, 0, 0])
+            self.set_all_motors_pos_async(pos=[0, 0, 0, 0])
         else:
             self.set_one_motor_pos(motor_id=self.motor_name2id(self.control_target), pos=0)
 
@@ -236,6 +229,7 @@ class AxoController:
         assert motor_id in [0, 1, 3, 4]
         assert self.control_target == self.motor_id2name(motor_id)
         assert self._hip_limit[0] <= pos <= self._hip_limit[1] if motor_id in [0, 3] else self._knee_limit[0] <= pos <= self._knee_limit[1]
+        assert self.control_mode == "position"
 
         high_byte, low_byte = from_int_to_16bit(pos, self._pos_factor)
 
@@ -256,6 +250,7 @@ class AxoController:
         assert self._knee_limit[0] <= pos[1] <= self._knee_limit[1]
         assert self._hip_limit[0] <= pos[2] <= self._hip_limit[1]
         assert self._knee_limit[0] <= pos[3] <= self._knee_limit[1]
+        assert self.control_mode == "position"
 
         byte_tuple = [from_int_to_16bit(i, self._pos_factor) for i in pos]
 
@@ -292,6 +287,7 @@ class AxoController:
         return np.linalg.norm(np.array(pos1) - np.array(pos2))
 
     def set_one_motor_vel(self, motor_id: int, vel: int):
+        assert self.control_mode == "velocity"
         raise NotImplementedError
 
     def set_all_motors_vel(self, vel: list):
@@ -302,6 +298,7 @@ class AxoController:
                         order: [left hip, left knee, right hip, right knee]
         """
         assert self.control_target == "all"
+        assert self.control_mode == "velocity"
         assert len(vel) == 4
         for v in vel:
             assert self._vel_limit[0] <= v <= self._vel_limit[1]
@@ -322,12 +319,12 @@ class AxoController:
         raise NotImplementedError
 
     def change_control_mode(self, mode: str):
-        assert mode in ["pos", "vel", "current"]
+        assert mode in ["position", "velocity", "current"]
 
         mode_idx = -1
-        if mode == "pos":
+        if mode == "position":
             mode_idx = 0
-        elif mode == "vel":
+        elif mode == "velocity":
             mode_idx = 1
         elif mode == "current":
             mode_idx = 2
@@ -336,6 +333,10 @@ class AxoController:
         msg = bytearray([0xAA, 0x6, 0xA8, mode_idx, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
         self._send_message(msg)
+
+        self.control_mode = mode
+        robot_state = self.get_robot_state()
+        assert robot_state[6] == mode_idx and robot_state[9] == mode_idx and robot_state[12] == mode_idx and robot_state[15] == mode_idx
 
     def change_communication_state(self, state: str):
         assert state in ["close", "open"]
@@ -422,7 +423,7 @@ class AxoController:
 
         return {"left": leg_info, "right": right_info}
 
-    def get_robot_state(self, timeout: int = 0.05):
+    def get_robot_state(self, timeout: int = 0.05) -> bytes:
         self.change_communication_state("open")
 
         time.sleep(timeout)
