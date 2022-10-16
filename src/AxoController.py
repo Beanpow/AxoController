@@ -29,7 +29,7 @@ class AxoController:
         self._knee_limit[1] -= angle_telorance[3]
         assert self._hip_limit[0] < self._hip_limit[1] and self._knee_limit[0] < self._knee_limit[1], "Angle telorance is too large."
         self._vel_limit = [-3000, 3000]  # rpm
-        self._current_limit = [-15, 15]  # A
+        self._current_limit = [-5, 7]  # A
         self._pos_factor = 100  # the pos will be multiplied by this factor
         self._current_factor = 100  # the current will be multiplied by this factor
         self._vel_download_factor = 1  # the vel will be multiplied by this factor when download to the robot
@@ -99,8 +99,10 @@ class AxoController:
     def _angle_detection(self) -> None:
         while self.is_angle_detection:
             left_hip, left_knee, right_hip, right_knee = self.get_leg_pos()
+            leg_current = self.get_leg_current()
             if self.verbose:
-                print(f"[info]: left_hip: {left_hip}, left_knee: {left_knee}, right_hip: {right_hip}, right_knee: {right_knee}")
+                print(f"[info]: postion, left_hip: {left_hip}, left_knee: {left_knee}, right_hip: {right_hip}, right_knee: {right_knee}")
+                print(f"[info]: current, left_hip: {leg_current[0]}, left_knee: {leg_current[1]}, right_hip: {leg_current[2]}, right_knee: {leg_current[3]}")
 
             if left_hip < self._hip_limit[0] or left_hip > self._hip_limit[1]:
                 print(f"[fatal]: left_hip: {left_hip} is out of limit: {self._hip_limit}")
@@ -117,6 +119,11 @@ class AxoController:
             if right_knee < self._knee_limit[0] or right_knee > self._knee_limit[1]:
                 print(f"[fatal]: right_knee: {right_knee} is out of limit: {self._knee_limit}")
                 self.exit_control_mode()
+
+            for i in range(4):
+                if leg_current[i] < self._current_limit[0] or leg_current[i] > self._current_limit[1]:
+                    print(f"[fatal]: leg_current: {leg_current[i]} is out of limit: {self._current_limit}")
+                    self.exit_control_mode()
 
             time.sleep(0.1)
 
@@ -225,7 +232,7 @@ class AxoController:
     def exit_control_mode(self):
         msg = bytearray([0xAA, 0x5, 0xA1, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
-        for i in range(3):
+        for i in range(2):
             self._send_message(msg)
 
         self.update_in_control_mode()
@@ -297,6 +304,14 @@ class AxoController:
         left_knee = leg_info["left"]["knee_vel"]
         right_hip = leg_info["right"]["hip_vel"]
         right_knee = leg_info["right"]["knee_vel"]
+        return left_hip, left_knee, right_hip, right_knee
+
+    def get_leg_current(self) -> LegInfoType:
+        leg_info = self.get_leg_info()
+        left_hip = leg_info["left"]["hip_current"]
+        left_knee = leg_info["left"]["knee_current"]
+        right_hip = leg_info["right"]["hip_current"]
+        right_knee = leg_info["right"]["knee_current"]
         return left_hip, left_knee, right_hip, right_knee
 
     def _angle_norm(self, pos1: Union[List[float], LegInfoType], pos2: Union[List[float], LegInfoType]) -> float:
