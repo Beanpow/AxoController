@@ -13,6 +13,7 @@ import time
 import numpy as np
 from typing import Union, List, Tuple
 from utils import check_sum, from_16bit_to_int, from_int_to_16bit
+from MutliprocessPlot import MutliprocessPlot
 
 
 LegInfoType = Tuple[float, float, float, float]
@@ -45,6 +46,9 @@ class AxoController:
 
         # Variable for safe control
         self.dangerous_cmds = [0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7]
+
+        # Variable for plot_info
+        self.is_plot_info = False
 
         # Variable for control
         self.control_mode = "position"
@@ -81,9 +85,32 @@ class AxoController:
         time.sleep(0.05)  # wait for the info thread to start
         self.open_angle_detection()
 
+        # Plot info thread
+        self.open_plot_info()
+
     def __del__(self):
         self.close_controller()
         print("[info]: The controller is closed.")
+
+    def open_plot_info(self) -> None:
+        self.is_plot_info = True
+        self.mutliprocess_plot = MutliprocessPlot()
+        self.mutliprocess_plot.start()
+
+        self.plot_info_thread = threading.Thread(target=self._plot_info)
+        self.plot_info_thread.setDaemon(True)
+        self.plot_info_thread.start()
+
+    def close_plot_info(self) -> None:
+        self.is_plot_info = False
+        self.mutliprocess_plot.stop()
+
+        time.sleep(0.3)
+        assert self.plot_info_thread.is_alive() is False
+
+    def _plot_info(self):
+        while self.is_plot_info:
+            self.mutliprocess_plot.main_conn.send([self.get_leg_pos()[2], self.get_leg_vel()[2], self.get_leg_current()[2]])
 
     def open_angle_detection(self) -> None:
         self.is_angle_detection = True
