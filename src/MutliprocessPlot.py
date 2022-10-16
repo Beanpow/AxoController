@@ -1,3 +1,13 @@
+# -*- encoding: utf-8 -*-
+'''
+@File    :   MutliProcessPlot.py
+@Time    :   2022/10/16 21:14:52
+@Author  :   Beanpow
+@Version :   1.0
+@Contact :   beanpow@gmail.com
+@Desc    :   None
+'''
+
 import matplotlib.pyplot as plt
 import numpy as np
 import time
@@ -20,7 +30,7 @@ class MutliprocessPlot:
         self.p.daemon = True
 
     def initFig(self):
-        self.fig = plt.figure(figsize=(13, 6))
+        self.fig = plt.figure(figsize=(18, 9))
         self.ax1 = self.fig.add_subplot(131)
         self.ax2 = self.fig.add_subplot(132)
         self.ax3 = self.fig.add_subplot(133)
@@ -54,11 +64,25 @@ class MutliprocessPlot:
 
     def DrawPic(self, isDraw):
         self.initFig()
-        data = np.array([]).reshape(0, 3)
+        data = np.array([]).reshape(0, 16)
 
-        (line1,) = self.ax1.plot(data[:, 0])
-        (line2,) = self.ax2.plot(data[:, 1])
-        (line3,) = self.ax3.plot(data[:, 2])
+        legend = ["hip_l", "knee_l", "hip_r", "knee_r"]
+        line1 = [self.ax1.plot(data[:, i], label=legend[i] + "_real") for i in range(4)]
+        line2 = [self.ax2.plot(data[:, i + 4], label=legend[i]) for i in range(4)]
+        line3 = [self.ax3.plot(data[:, i + 8], label=legend[i]) for i in range(4)]
+        line4 = [self.ax1.plot(data[:, i + 12], label=legend[i] + "_target") for i in range(4)]
+
+        self.ax1.legend()
+        self.ax2.legend()
+        self.ax3.legend()
+
+        self.ax1.set_title("Position")
+        self.ax2.set_title("Velocity")
+        self.ax3.set_title("Current")
+
+        self.ax1.set_ylabel("Angle / deg")
+        self.ax2.set_ylabel("Velocity / rpm")
+        self.ax3.set_ylabel("Current / A")
 
         self.fig.canvas.draw()
 
@@ -72,17 +96,21 @@ class MutliprocessPlot:
             temp = self.plot_conn.recv()
             data = np.vstack((data, temp))
 
-            line1.set_data(range(len(data[-self.drawSize :, 0])), data[-self.drawSize :, 0])
-            line2.set_data(range(len(data[-self.drawSize :, 1])), data[-self.drawSize :, 1])
-            line3.set_data(range(len(data[-self.drawSize :, 2])), data[-self.drawSize :, 2])
+            for i in range(4):
+                line1[i][0].set_data(range(len(data[-self.drawSize :, i])), data[-self.drawSize :, i])
+                line2[i][0].set_data(range(len(data[-self.drawSize :, i + 4])), data[-self.drawSize :, i + 4])
+                line3[i][0].set_data(range(len(data[-self.drawSize :, i + 8])), data[-self.drawSize :, i + 8])
+                line4[i][0].set_data(range(len(data[-self.drawSize :, i + 12])), data[-self.drawSize :, i + 12])
 
             self.fig.canvas.restore_region(axbackground1)  # type: ignore
             self.fig.canvas.restore_region(axbackground2)  # type: ignore
             self.fig.canvas.restore_region(axbackground3)  # type: ignore
 
-            self.ax1.draw_artist(line1)
-            self.ax2.draw_artist(line2)
-            self.ax3.draw_artist(line3)
+            for i in range(4):
+                self.ax1.draw_artist(line1[i][0])
+                self.ax2.draw_artist(line2[i][0])
+                self.ax3.draw_artist(line3[i][0])
+                self.ax1.draw_artist(line4[i][0])
 
             self.fig.canvas.blit(self.ax1.bbox)  # type: ignore
             self.fig.canvas.blit(self.ax2.bbox)  # type: ignore

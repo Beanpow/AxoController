@@ -47,9 +47,6 @@ class AxoController:
         # Variable for safe control
         self.dangerous_cmds = [0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7]
 
-        # Variable for plot_info
-        self.is_plot_info = False
-
         # Variable for control
         self.control_mode = "position"
         self.control_target = "all"
@@ -85,32 +82,9 @@ class AxoController:
         time.sleep(0.05)  # wait for the info thread to start
         self.open_angle_detection()
 
-        # Plot info thread
-        self.open_plot_info()
-
     def __del__(self):
         self.close_controller()
         print("[info]: The controller is closed.")
-
-    def open_plot_info(self) -> None:
-        self.is_plot_info = True
-        self.mutliprocess_plot = MutliprocessPlot()
-        self.mutliprocess_plot.start()
-
-        self.plot_info_thread = threading.Thread(target=self._plot_info)
-        self.plot_info_thread.setDaemon(True)
-        self.plot_info_thread.start()
-
-    def close_plot_info(self) -> None:
-        self.is_plot_info = False
-        self.mutliprocess_plot.stop()
-
-        time.sleep(0.3)
-        assert self.plot_info_thread.is_alive() is False
-
-    def _plot_info(self):
-        while self.is_plot_info:
-            self.mutliprocess_plot.main_conn.send([self.get_leg_pos()[2], self.get_leg_vel()[2], self.get_leg_current()[2]])
 
     def open_angle_detection(self) -> None:
         self.is_angle_detection = True
@@ -152,7 +126,7 @@ class AxoController:
                     print(f"[fatal]: leg_current: {leg_current[i]} is out of limit: {self._current_limit}")
                     self.exit_control_mode()
 
-            time.sleep(0.1)
+            time.sleep(0.01)
 
     def close_controller(self):
         if self.in_control_mode:
@@ -467,6 +441,7 @@ class AxoController:
         left_info = None
         right_info = None
 
+        assert self.is_get_info is True, "Please open the receive info thread first."
         assert len(self.info_stack) > 0, "The info stack is empty, please open the receive info thread first."
 
         for info in reversed(self.info_stack):
