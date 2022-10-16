@@ -29,8 +29,8 @@ class AxoController:
         self._knee_limit[0] += angle_telorance[2]
         self._knee_limit[1] -= angle_telorance[3]
         assert self._hip_limit[0] < self._hip_limit[1] and self._knee_limit[0] < self._knee_limit[1], "Angle telorance is too large."
-        self._vel_limit = [-3000, 3000]  # rpm
-        self._current_limit = [-5, 7]  # A
+        self._vel_limit = [-500, 500]  # rpm
+        self._current_limit = [-7, 7]  # A
         self._pos_factor = 100  # the pos will be multiplied by this factor
         self._current_factor = 100  # the current will be multiplied by this factor
         self._vel_download_factor = 1  # the vel will be multiplied by this factor when download to the robot
@@ -298,12 +298,9 @@ class AxoController:
         assert self.control_mode == "velocity"
 
         if not hasattr(self, "pid_list"):
-            self.pid_list = [PID(60, 0, 1, 0) if i % 2 == 0 else PID(60, 0, 1, 0) for i in range(4)]
-            for idx, pid in enumerate(self.pid_list):
-                if idx % 2 == 0:
-                    pid.output_limits = self._hip_limit  # type: ignore
-                else:
-                    pid.output_limits = self._knee_limit  # type: ignore
+            self.pid_list = [PID(60, 0, 1, 0) if i % 2 == 0 else PID(30, 0, 1, 0) for i in range(4)]
+            for pid in self.pid_list:
+                pid.output_limits = [self._vel_limit[0] + 50, self._vel_limit[1] - 50]  # type: ignore
 
         for pid, p in zip(self.pid_list, pos):
             pid.setpoint = p
@@ -311,7 +308,14 @@ class AxoController:
         current_pos = self.get_leg_pos()
         control_value = [pid(current_pos[idx]) for idx, pid in enumerate(self.pid_list)]
 
-        AxoController.set_all_motors_vel(self, control_value)
+        self.set_all_motors_vel(control_value)
+
+    def set_all_motors_pos_vel_based_sync(self, pos: List[float], norm: float = 0.55) -> None:
+        while self._angle_norm((leg_info := self.get_leg_pos()), pos) > 0.55:
+            control_target = [leg_info[i] + 0.3 * (pos[i] - leg_info[i]) for i in range(4)]
+
+            self.set_all_motors_pos_vel_based(control_target)
+            time.sleep(0.05)
 
     def set_all_motors_pos_sync(self, pos: List[float]) -> None:
         self.set_all_motors_pos_async(pos)
@@ -397,6 +401,7 @@ class AxoController:
         self.control_mode = mode
         robot_state = self.get_robot_state()
         assert robot_state[6] == mode_idx and robot_state[9] == mode_idx and robot_state[12] == mode_idx and robot_state[15] == mode_idx
+        print(f"[info] control mode changed to {mode}")
 
     def change_communication_state(self, state: str):
         assert state in ["close", "open"]

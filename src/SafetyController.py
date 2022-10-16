@@ -25,9 +25,8 @@ class SafetyController:
 
     def run(self, trajectory: list[list[float]]):
         self.axo_controller.enter_control_mode()
-        self.axo_controller.change_control_mode("position")
-        self.axo_controller.set_all_motors_pos_sync(trajectory[0])
         self.axo_controller.change_control_mode("velocity")
+        self.axo_controller.set_all_motors_pos_vel_based_sync(trajectory[0])
 
         for target_pos in trajectory:
             if self.isPlot:
@@ -48,5 +47,10 @@ class SafetyController:
 
 if __name__ == "__main__":
     safety_controller = SafetyController()
-    traj = [[math.sin(i / 10) * 15 + 10, -(math.sin(i / 10) * 15 + 15), math.sin(i / 10) * 15 + 10, -(math.sin(i / 10) * 15 + 15)] for i in range(1000)]
-    safety_controller.run(trajectory=traj)
+    try:
+        traj = [[math.sin(i / 10 + math.pi / 2) * 15 + 10, -(math.sin(i / 10 + math.pi / 2) * 15 + 15), math.sin(i / 10) * 15 + 10, -(math.sin(i / 10) * 15 + 15)] for i in range(1000)]
+        safety_controller.run(trajectory=traj)
+    except KeyboardInterrupt:
+        print("[info] Keyboard interrupt")
+    finally:
+        safety_controller.close()

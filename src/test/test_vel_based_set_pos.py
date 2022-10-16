@@ -18,20 +18,19 @@ def main():
 
     max_vel = 500
 
-    pid = PID(60, 0, 1, 0)
+    pid = PID(60, 0, 1, -20)
 
     try:
         print("Start")
         for i in range(2000):
-            current_value = axo.get_leg_pos()[2]
-            pid.setpoint = math.sin(i / 20) * 20 + 15
-            axo.target_pos = [0, 0, pid.setpoint, 0]
+            current_value = axo.get_leg_pos()[3]
+            # pid.setpoint = math.sin(i / 20) *  + 15
             output = pid(current_value)
             assert output is not None
             output = min(max(output, -max_vel), max_vel)
             print(f"control value is :{output}, current value is {current_value}, setpoint is {pid.setpoint}")
 
-            axo.set_all_motors_vel([0, 0, output, 0])
+            axo.set_all_motors_vel([0, 0, 0, output])
             time.sleep(0.01)
     finally:
         axo.exit_control_mode()
