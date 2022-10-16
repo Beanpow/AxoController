@@ -11,9 +11,9 @@ import serial
 import threading
 import time
 import numpy as np
+from simple_pid.PID import PID
 from typing import Union, List, Tuple
 from utils import check_sum, from_16bit_to_int, from_int_to_16bit
-from MutliprocessPlot import MutliprocessPlot
 
 
 LegInfoType = Tuple[float, float, float, float]
@@ -283,7 +283,35 @@ class AxoController:
         self._send_message(msg)
 
     def set_all_motors_pos_vel_based(self, pos: List[float]) -> None:
-        pass
+        """set all motors pos based on velocity control
+
+        Args:
+            pos (List[float]): the desire position of all motors, unit: degree,
+                               order: [left hip, left knee, right hip, right knee]
+        """
+        assert self.control_target == "all"
+        assert len(pos) == 4
+        assert self._hip_limit[0] <= pos[0] <= self._hip_limit[1]
+        assert self._knee_limit[0] <= pos[1] <= self._knee_limit[1]
+        assert self._hip_limit[0] <= pos[2] <= self._hip_limit[1]
+        assert self._knee_limit[0] <= pos[3] <= self._knee_limit[1]
+        assert self.control_mode == "velocity"
+
+        if not hasattr(self, "pid_list"):
+            self.pid_list = [PID(60, 0, 1, 0) if i % 2 == 0 else PID(60, 0, 1, 0) for i in range(4)]
+            for idx, pid in enumerate(self.pid_list):
+                if idx % 2 == 0:
+                    pid.output_limits = self._hip_limit  # type: ignore
+                else:
+                    pid.output_limits = self._knee_limit  # type: ignore
+
+        for pid, p in zip(self.pid_list, pos):
+            pid.setpoint = p
+
+        current_pos = self.get_leg_pos()
+        control_value = [pid(current_pos[idx]) for idx, pid in enumerate(self.pid_list)]
+
+        AxoController.set_all_motors_vel(self, control_value)
 
     def set_all_motors_pos_sync(self, pos: List[float]) -> None:
         self.set_all_motors_pos_async(pos)

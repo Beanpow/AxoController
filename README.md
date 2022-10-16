@@ -9,7 +9,7 @@ This repository consist of axo controller, Moment safety detector and Info plott
  ┃ ┗ Main thread
  ┃ ┗ Data recevier thread
  ┃ ┗ Angle detection thread
- ┣ Info Plotter (to be implemented)
+ ┣ Info Plotter
  ┗ Moment safety detector (to be implemented)
 ```
 

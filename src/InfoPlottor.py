@@ -37,6 +37,9 @@ class InfoPlottor:
         time.sleep(0.3)
         assert self.plot_info_thread.is_alive() is False
 
+    def set_target_pos(self, target_pos: list[int]) -> None:
+        self.target_pos = target_pos
+
     def _plot_info(self):
         while self.is_plot_info:
             self.mutliprocess_plot.main_conn.send([*self.axo_controller.get_leg_pos(), *self.axo_controller.get_leg_vel(), *self.axo_controller.get_leg_current(), *self.target_pos])
