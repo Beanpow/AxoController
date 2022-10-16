@@ -311,7 +311,7 @@ class AxoController:
         self.set_all_motors_vel(control_value)
 
     def set_all_motors_pos_vel_based_sync(self, pos: List[float], norm: float = 0.55) -> None:
-        while self._angle_norm((leg_info := self.get_leg_pos()), pos) > 0.55:
+        while self._angle_norm((leg_info := self.get_leg_pos()), pos) > norm:
             control_target = [leg_info[i] + 0.3 * (pos[i] - leg_info[i]) for i in range(4)]
 
             self.set_all_motors_pos_vel_based(control_target)
