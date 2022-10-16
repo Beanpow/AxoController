@@ -19,7 +19,7 @@ LegInfoType = Tuple[float, float, float, float]
 
 
 class AxoController:
-    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: List[int] = [20, 30, 20, 5], verbose: bool = False):
+    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: List[int] = [10, 50, 50, 5], verbose: bool = False):
         # Constant
         self._hip_limit = [-25, 95]  # degree
         self._knee_limit = [-100, 8]  # degree
@@ -46,6 +46,11 @@ class AxoController:
         # Variable for safe control
         self.dangerous_cmds = [0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7]
 
+        # Variable for control
+        self.control_mode = "position"
+        self.control_target = "all"
+        self.in_control_mode = False
+
         # Establish serial connection
         try:
             self.ser = serial.Serial(port, byterate, timeout=timeout)
@@ -62,10 +67,7 @@ class AxoController:
         if self.verbose:
             print("[info]: The connection and robot state is fine.")
 
-        # Variable for control
-        self.control_mode = "position"
-        self.control_target = "all"
-        self.in_control_mode = False
+        # update in_control_mode
         self.update_in_control_mode()
         while self.in_control_mode is not False:
             self.exit_control_mode()
@@ -81,6 +83,7 @@ class AxoController:
 
     def __del__(self):
         self.close_controller()
+        print("[info]: The controller is closed.")
 
     def open_angle_detection(self) -> None:
         self.is_angle_detection = True
@@ -114,6 +117,8 @@ class AxoController:
             if right_knee < self._knee_limit[0] or right_knee > self._knee_limit[1]:
                 print(f"[fatal]: right_knee: {right_knee} is out of limit: {self._knee_limit}")
                 self.exit_control_mode()
+
+            time.sleep(0.1)
 
     def close_controller(self):
         if self.in_control_mode:
@@ -193,6 +198,7 @@ class AxoController:
         self.in_control_mode = robot_state[5] == 1
 
     def enter_control_mode(self) -> None:
+        self.change_control_mode("position")
         if self.control_target == "all":
             self.set_all_motors_pos_async(pos=[0, 0, 0, 0])
         else:
@@ -219,7 +225,8 @@ class AxoController:
     def exit_control_mode(self):
         msg = bytearray([0xAA, 0x5, 0xA1, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
-        self._send_message(msg)
+        for i in range(3):
+            self._send_message(msg)
 
         self.update_in_control_mode()
         if self.in_control_mode is not False:
@@ -378,13 +385,13 @@ class AxoController:
 
     def _recevice_info(self):
         while self.is_get_info:
+            # Prevent the msg is too short, which will cannot be decoded.
+            time.sleep(0.005)
+
             self.info_stack.extend(self._get_info())
 
             if len(self.info_stack) > self.info_stacksize:
                 self.info_stack = self.info_stack[-self.info_stacksize :]
-
-            # Provent the msg is too short, which will cannot be decoded.
-            time.sleep(0.005)
 
     def initial_check(self):
         self._check_commuintation()
@@ -418,19 +425,23 @@ class AxoController:
         left_info = None
         right_info = None
 
+        assert len(self.info_stack) > 0, "The info stack is empty, please open the receive info thread first."
+
         for info in reversed(self.info_stack):
             if info[2] == 0x01:
                 has_right_leg_info = True
-                left_info = self._process_leg_info(info)
+                right_info = self._process_leg_info(info)
             elif info[2] == 0x00:
                 has_left_leg_info = True
-                right_info = self._process_leg_info(info)
+                left_info = self._process_leg_info(info)
 
             if has_left_leg_info and has_right_leg_info:
                 break
 
         else:  # Be Careful, this branch will be executed if the for loop is not breaked.
             raise Exception(f"Cannot get leg info. has_left_leg_info: {has_left_leg_info}, has_right_leg_info: {has_right_leg_info}")
+
+        # TODO: should i clear the info stack?
 
         return {"left": left_info, "right": right_info}
 
@@ -443,7 +454,7 @@ class AxoController:
         else:
             robot_state = self._get_info()[-1]
 
-        assert robot_state[2] == 2, f"Cannot get robot state, current info_num is {robot_state[2]}"
+        assert robot_state[2] == 2, f"Cannot get robot state, current info_num is {robot_state[2]}, is_get_info: {self.is_get_info}, info_stack: {self.info_stack[-10:]}"
 
         self.change_communication_state("close")
 
@@ -452,7 +463,7 @@ class AxoController:
             tmp = self.info_stack[-1]
         else:
             tmp = self._get_info()[-1]
-        assert tmp[2] in [0, 1], f"Cannnot get leg state, current info_num is {tmp[2]}"
+        assert tmp[2] in [0, 1], f"Cannnot get leg state, current info_num is {tmp[2]}, is_get_info: {self.is_get_info}"
 
         return robot_state
 
@@ -474,7 +485,7 @@ class AxoController:
         info_size = 21
 
         info = self.ser.read_all()
-        assert info is not None
+        assert info is not None and len(info) > 0, "Cannot get info from serial port"
         info = info.split(prefix)
         info = [prefix + i for i in info if len(i) == info_size - 1]
         info = [i for i in info if i[-2] == check_sum(i)]
