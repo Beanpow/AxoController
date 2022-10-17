@@ -43,4 +43,4 @@ class InfoPlottor:
     def _plot_info(self):
         while self.is_plot_info:
             self.mutliprocess_plot.main_conn.send([*self.axo_controller.get_leg_pos(), *self.axo_controller.get_leg_vel(), *self.axo_controller.get_leg_current(), *self.target_pos])
-            time.sleep(0.01)
+            time.sleep(0.03)
