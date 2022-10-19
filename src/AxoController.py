@@ -20,7 +20,7 @@ LegInfoType = Tuple[float, float, float, float]
 
 
 class AxoController:
-    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: List[int] = [10, 50, 50, 5], verbose: bool = False):
+    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: List[int] = [5, 50, 40, 5], verbose: bool = False):
         # Constant
         self._hip_limit = [-25, 95]  # degree
         self._knee_limit = [-100, 8]  # degree
@@ -29,8 +29,8 @@ class AxoController:
         self._knee_limit[0] += angle_telorance[2]
         self._knee_limit[1] -= angle_telorance[3]
         assert self._hip_limit[0] < self._hip_limit[1] and self._knee_limit[0] < self._knee_limit[1], "Angle telorance is too large."
-        self._vel_limit = [-500, 500]  # rpm
-        self._current_limit = [-7, 7]  # A
+        self._vel_limit = [-600, 600]  # rpm
+        self._current_limit = [-9, 9]  # A
         self._pos_factor = 100  # the pos will be multiplied by this factor
         self._current_factor = 100  # the current will be multiplied by this factor
         self._vel_download_factor = 1  # the vel will be multiplied by this factor when download to the robot
@@ -311,9 +311,13 @@ class AxoController:
 
         self.set_all_motors_vel(control_value)
 
-    def set_all_motors_pos_vel_based_sync(self, pos: List[float], norm: float = 0.55) -> None:
-        while self._angle_norm((leg_info := self.get_leg_pos()), pos) > norm:
-            control_target = [leg_info[i] + 0.3 * (pos[i] - leg_info[i]) for i in range(4)]
+    def set_all_motors_pos_vel_based_sync(self, pos: List[float], norm: float = 2) -> None:
+        init_pos_norm = self._angle_norm(self.get_leg_pos(), pos)
+
+        while (angle_norm := self._angle_norm((leg_info := self.get_leg_pos()), pos)) > norm:
+            ratio = angle_norm / init_pos_norm * 2 * np.pi
+            lr = (-np.cos(ratio) + 1) * 0.1 + 0.1
+            control_target = [leg_info[i] + lr * (pos[i] - leg_info[i]) for i in range(4)]
 
             self.set_all_motors_pos_vel_based(control_target)
             time.sleep(0.05)
