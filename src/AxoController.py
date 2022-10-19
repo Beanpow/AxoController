@@ -139,6 +139,7 @@ class AxoController:
             self.ser.close()
 
     def _send_message(self, msg: bytearray):
+        # TODO: add lock?
         if self.verbose:
             print(f"[info]: Sending message: {msg}")
         assert msg[-2] == check_sum(msg)
