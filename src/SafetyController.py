@@ -13,6 +13,7 @@ import math
 
 from InfoPlottor import InfoPlottor
 from AxoController import AxoController
+from utils import load_trj
 
 
 class SafetyController:
@@ -48,7 +49,8 @@ class SafetyController:
 if __name__ == "__main__":
     safety_controller = SafetyController()
     try:
-        traj = [[math.sin(i / 10 + math.pi / 2) * 15 + 10, -(math.sin(i / 10 + math.pi / 2) * 15 + 15), math.sin(i / 10) * 15 + 10, -(math.sin(i / 10) * 15 + 15)] for i in range(1000)]
+        # traj = [[math.sin(i / 10 + math.pi / 2) * 15 + 10, -(math.sin(i / 10 + math.pi / 2) * 15 + 15), math.sin(i / 10) * 15 + 10, -(math.sin(i / 10) * 15 + 15)] for i in range(1000)]
+        traj = load_trj("./gait_gen/final_gait.csv")
         safety_controller.run(trajectory=traj)
     except KeyboardInterrupt:
         print("[info] Keyboard interrupt")

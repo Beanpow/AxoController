@@ -57,3 +57,12 @@ def from_16bit_to_int(high_byte: int, low_byte: int, factor: float) -> float:
         byte16 *= -1
 
     return byte16 * factor
+
+
+def load_trj(file_path):
+    trj = []
+    with open(file_path, "r") as f:
+        for line in f:
+            line = line.split(',')
+            trj.append([float(i) for i in line])
+    return trj
