@@ -29,8 +29,8 @@ class AxoController:
         self._knee_limit[0] += angle_telorance[2]
         self._knee_limit[1] -= angle_telorance[3]
         assert self._hip_limit[0] < self._hip_limit[1] and self._knee_limit[0] < self._knee_limit[1], "Angle telorance is too large."
-        self._vel_limit = [-600, 600]  # rpm
-        self._current_limit = [-9, 9]  # A
+        self._vel_limit = [-900, 900]  # rpm
+        self._current_limit = [-14, 14]  # A
         self._pos_factor = 100  # the pos will be multiplied by this factor
         self._current_factor = 100  # the current will be multiplied by this factor
         self._vel_download_factor = 1  # the vel will be multiplied by this factor when download to the robot
@@ -206,12 +206,13 @@ class AxoController:
 
         self.in_control_mode = robot_state[5] == 1
 
-    def enter_control_mode(self) -> None:
-        self.change_control_mode("position")
-        if self.control_target == "all":
-            self.set_all_motors_pos_async(pos=[0, 0, 0, 0])
-        else:
-            self.set_one_motor_pos(motor_id=self.motor_name2id(self.control_target), pos=0)
+    def enter_control_mode(self, isChangeMode: bool = True) -> None:
+        if isChangeMode:
+            self.change_control_mode("position")
+            if self.control_target == "all":
+                self.set_all_motors_pos_async(pos=[0, 0, 0, 0])
+            else:
+                self.set_one_motor_pos(motor_id=self.motor_name2id(self.control_target), pos=0)
 
         msg = bytearray([0xAA, 0x5, 0xA0, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
@@ -299,7 +300,7 @@ class AxoController:
         assert self.control_mode == "velocity"
 
         if not hasattr(self, "pid_list"):
-            self.pid_list = [PID(60, 0, 1, 0) if i % 2 == 0 else PID(30, 0, 1, 0) for i in range(4)]
+            self.pid_list = [PID(60, 0, 1, 0) if i % 2 == 0 else PID(60, 0, 1, 0) for i in range(4)]
             for pid in self.pid_list:
                 pid.output_limits = [self._vel_limit[0] + 50, self._vel_limit[1] - 50]  # type: ignore
 
@@ -307,15 +308,16 @@ class AxoController:
             pid.setpoint = p
 
         current_pos = self.get_leg_pos()
-        control_value = [pid(current_pos[idx]) for idx, pid in enumerate(self.pid_list)]
+        current_vel = self.get_leg_vel()
+        control_value = [pid(current_pos[idx], current_vel[idx]) for idx, pid in enumerate(self.pid_list)]
 
         self.set_all_motors_vel(control_value)
 
-    def set_all_motors_pos_vel_based_sync(self, pos: List[float], norm: float = 2.5) -> None:
+    def set_all_motors_pos_vel_based_sync(self, pos: List[float], norm: float = 3) -> None:
         init_pos_norm = self._angle_norm(self.get_leg_pos(), pos)
 
         while (angle_norm := self._angle_norm((leg_info := self.get_leg_pos()), pos)) > norm:
-            ratio = angle_norm / init_pos_norm * 2 * np.pi
+            ratio = angle_norm / init_pos_norm * np.pi + np.pi
             lr = (-np.cos(ratio) + 1) * 0.1 + 0.1
             control_target = [leg_info[i] + lr * (pos[i] - leg_info[i]) for i in range(4)]
 
