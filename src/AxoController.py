@@ -11,7 +11,9 @@ import serial
 import threading
 import time
 import numpy as np
-from simple_pid.PID import PID
+
+# from simple_pid.PID import PID
+from utils import PID
 from typing import Union, List, Tuple
 from utils import check_sum, from_16bit_to_int, from_int_to_16bit
 
@@ -20,7 +22,7 @@ LegInfoType = Tuple[float, float, float, float]
 
 
 class AxoController:
-    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: List[int] = [5, 50, 40, 5], verbose: bool = False):
+    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: List[int] = [5, 50, 40, 5], verbose: bool = False, open_detection: bool = True):
         # Constant
         self._hip_limit = [-25, 95]  # degree
         self._knee_limit = [-100, 8]  # degree
@@ -40,6 +42,7 @@ class AxoController:
         self.info_stack = []
         self.info_stacksize = 10000
         self.is_get_info = False
+        self._last_send_message_time = time.time()
 
         # Variable for angle detection
         self.is_angle_detection = False
@@ -80,7 +83,8 @@ class AxoController:
 
         # Angle detection thread
         time.sleep(0.05)  # wait for the info thread to start
-        self.open_angle_detection()
+        if open_detection:
+            self.open_angle_detection()
 
     def __del__(self):
         self.close_controller()
@@ -147,9 +151,12 @@ class AxoController:
         if msg[2] in self.dangerous_cmds:
             self._cmd_check(msg)
 
-        time.sleep(0.005)
+        # time.sleep(0.005)
+        if (now := time.time()) - self._last_send_message_time < 0.005:
+            time.sleep(0.005 - (now - self._last_send_message_time))
         write_num = self.ser.write(msg)
         assert write_num == len(msg)
+        self._last_send_message_time = time.time()
 
     def _cmd_check(self, msg):
         assert (cmd := msg[2]) in self.dangerous_cmds
@@ -284,7 +291,7 @@ class AxoController:
         msg[-2] = check_sum(msg)
         self._send_message(msg)
 
-    def set_all_motors_pos_vel_based(self, pos: List[float]) -> None:
+    def set_all_motors_pos_vel_based(self, pos: List[float], vel: List[float] = [0, 0, 0, 0]) -> None:
         """set all motors pos based on velocity control
 
         Args:
@@ -299,19 +306,40 @@ class AxoController:
         assert self._knee_limit[0] <= pos[3] <= self._knee_limit[1]
         assert self.control_mode == "velocity"
 
+        # if not hasattr(self, "pid_list"):
+        #     self.pid_list = [PID(60, 0, 0, 0) if i % 2 == 0 else PID(30, 0, 0, 0) for i in range(4)]
+        #     for pid in self.pid_list:
+        #         pid.output_limits = [self._vel_limit[0] + 50, self._vel_limit[1] - 50]  # type: ignore
+
         if not hasattr(self, "pid_list"):
-            self.pid_list = [PID(60, 0, 1, 0) if i % 2 == 0 else PID(60, 0, 1, 0) for i in range(4)]
+            print("init pid")
+            self.pid_list = [PID(100, 0, 20, 0) if i % 2 == 0 else PID(60, 0, 5, 0) for i in range(4)]
             for pid in self.pid_list:
-                pid.output_limits = [self._vel_limit[0] + 50, self._vel_limit[1] - 50]  # type: ignore
+                pid.output_limits = (self._vel_limit[0] + 50, self._vel_limit[1] - 50)
 
         for pid, p in zip(self.pid_list, pos):
             pid.setpoint = p
 
         current_pos = self.get_leg_pos()
-        current_vel = self.get_leg_vel()
-        control_value = [pid(current_pos[idx], current_vel[idx]) for idx, pid in enumerate(self.pid_list)]
+
+        # control_value = [pid(current_pos[idx], diff_vel[idx]) for idx, pid in enumerate(self.pid_list)]
+        print("last_error: ", [pid.last_error for pid in self.pid_list])
+        pos_error = [pos[idx] - current_pos[idx] for idx in range(4)]
+        print("last_error diff", [pos_error[i] - self.pid_list[i].last_error if self.pid_list[i].last_error else 0 for i in range(4)])
+        control_value = [pid(current_pos[idx], vel[idx]) for idx, pid in enumerate(self.pid_list)]
 
         self.set_all_motors_vel(control_value)
+
+        print("target pos: ", pos)
+        print("current pos: ", current_pos)
+        print("pos error: ", [pos[idx] - current_pos[idx] for idx in range(4)])
+        print("control vel: ", self.pid_list[0]._proportional, self.pid_list[0]._derivative)
+
+        if hasattr(self, "pid_res"):
+            self.pid_res.append([self.pid_list[0]._proportional, self.pid_list[0]._derivative, self.pid_list[0].current_vel, vel[0]])
+        else:
+            self.pid_res = []
+        print("----------------------------------------")
 
     def set_all_motors_pos_vel_based_sync(self, pos: List[float], norm: float = 3) -> None:
         init_pos_norm = self._angle_norm(self.get_leg_pos(), pos)
@@ -442,7 +470,7 @@ class AxoController:
     def _recevice_info(self):
         while self.is_get_info:
             # Prevent the msg is too short, which will cannot be decoded.
-            time.sleep(0.005)
+            time.sleep(0.01)
 
             self.info_stack.extend(self._get_info())
 

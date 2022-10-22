@@ -26,23 +26,34 @@ def main():
             gait = [float(line[i]) if i in [9, 4] else float(line[i]) * 180 / math.pi for i in [9, 12, 4, 7]]
             total_gait.append(gait)
 
-    total_gait = np.array(total_gait)
-    t = np.arange(len(total_gait)).reshape(-1, 1) / len(total_gait)
+    total_gait = np.array(total_gait) * 0.7
+    cycle_time = 4
+    t = np.arange(len(total_gait)).reshape(-1, 1) / len(total_gait) * cycle_time
 
-    total_y_new = np.empty((len(total_gait) - 1, 4))
-    total_y_hat_new = np.empty((len(total_gait) - 1, 4))
+    total_y_new = np.empty((3 * (len(t) - 1), 4))
+    total_y_hat_new = np.empty((3 * (len(t) - 1), 4))
+    x_new = np.arange(0, cycle_time + 0.000001, cycle_time / (len(t) - 1) / 3)
     for i in range(4):
         tck = interpolate.splrep(t, total_gait[:, i], s=40, per=True)
 
-        x_new = np.arange(0, 1.02, 0.02)
         y_new = interpolate.splev(x_new, tck, der=0)[:-1]
         y_hat_new = interpolate.splev(x_new, tck, der=1)[:-1]
+
+        y_hat_new = y_hat_new
+        # plt.plot(x_new[:-1], y_new, label=f"axis{i}")
+        # plt.plot(x_new[:-1], y_hat_new, label=f"axis{i} vel")
+        # plt.show()
         total_y_new[:, i] = y_new
         total_y_hat_new[:, i] = y_hat_new
 
     print(total_y_hat_new.shape, total_y_new.shape)
     total_gait = np.vstack((total_y_new, total_y_hat_new))
     print(total_gait.shape)
+
+    plt.plot(x_new[:-1], total_y_hat_new[:, 0])
+    plt.plot(x_new[:-1], total_y_new[:, 0])
+    plt.legend(["vel", "pos"])
+    plt.show()
 
     with open("./final_gait.csv", "w") as f:
         for gait in total_gait:

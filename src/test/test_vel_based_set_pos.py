@@ -12,26 +12,16 @@ def main():
     port = "com3"
     axo = AxoController(port=port, angle_telorance=[10, 50, 65, 3])
     axo.enter_control_mode()
-    axo.change_control_mode("position")
-    axo.set_all_motors_pos_sync([0, 0, 0, 0])
+    # axo.change_control_mode("position")
+    # axo.set_all_motors_pos_sync([0, 0, 0, 0])
     axo.change_control_mode("velocity")
-
-    max_vel = 500
-
-    pid = PID(60, 0, 1, -20)
 
     try:
         print("Start")
         for i in range(2000):
-            current_value = axo.get_leg_pos()[3]
-            # pid.setpoint = math.sin(i / 20) *  + 15
-            output = pid(current_value)
-            assert output is not None
-            output = min(max(output, -max_vel), max_vel)
-            print(f"control value is :{output}, current value is {current_value}, setpoint is {pid.setpoint}")
+            axo.set_all_motors_pos_vel_based([20, 0, 0, 0], [0, 0, 0, 0])
 
-            axo.set_all_motors_vel([0, 0, 0, output])
-            time.sleep(0.01)
+            time.sleep(0.05)
     finally:
         axo.exit_control_mode()
         axo.close_controller()

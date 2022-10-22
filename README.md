@@ -7,8 +7,8 @@ This repository consist of axo controller, Moment safety detector and Info plott
  Safety controller (to be implemented)
  ┣ Axo Controller (to be tested)
  ┃ ┗ Main thread (to be tested)
- ┃ ┗ Data recevier thread (to be tested)
- ┃ ┗ Angle detection thread (to be tested)
+ ┃ ┗ Data recevier thread: 200Hz (to be tested)
+ ┃ ┗ Angle detection thread: 100Hz (to be tested)
  ┣ Info Plotter
  ┗ Moment safety detector (to be tested)
 ```
