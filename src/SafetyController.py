@@ -12,12 +12,14 @@ import time
 from tqdm import tqdm
 from InfoPlottor import InfoPlottor
 from AxoController import AxoController
+from MomentManager import MomentManager
 from utils import load_trj
 
 
 class SafetyController:
-    def __init__(self, port: str = "com3", isPlot: bool = True) -> None:
-        self.axo_controller = AxoController(port=port)
+    def __init__(self, axo_port: str, moment_port: str, isPlot: bool = True) -> None:
+        self.moment_menager = MomentManager(port=moment_port)
+        self.axo_controller = AxoController(port=axo_port)
         self.isPlot = isPlot
         if self.isPlot:
             self.info_plottor = InfoPlottor(axo_controller=self.axo_controller)
@@ -76,7 +78,7 @@ class SafetyController:
 
 
 if __name__ == "__main__":
-    safety_controller = SafetyController()
+    safety_controller = SafetyController(moment_port="com5", axo_port="com3", isPlot=True)
     try:
         # traj = [[math.sin(i / 10 + math.pi / 2) * 15 + 10, -(math.sin(i / 10 + math.pi / 2) * 15 + 15), math.sin(i / 10) * 15 + 10, -(math.sin(i / 10) * 15 + 15)] for i in range(1000)]
         traj_pos, traj_vel = load_trj("./gait_gen/final_gait.csv")
