@@ -28,13 +28,15 @@ class SafetyController:
         one_step_time = one_cycle_duration / len(traj_pos)
         for target_pos, target_vel in zip(traj_pos, traj_vel):
             start_time = time.time()
+            if not self.axo_controller.in_control_mode:
+                break
+
             if self.isPlot:
                 self.info_plottor.set_target_pos(target_pos)
 
             self.axo_controller.set_all_motors_pos_vel_based(target_pos, target_vel)
 
             assert time.time() - start_time <= one_step_time, "one step time is too short"
-            print(one_step_time - (time.time() - start_time))
             time.sleep(one_step_time - (time.time() - start_time))
 
     def run(self, trajectory: tuple[list[list[float]], list[list[float]]], duration: int):
@@ -51,6 +53,9 @@ class SafetyController:
         last_time = start_time
         with tqdm(total=duration) as pbar:
             while True:
+                if not self.axo_controller.in_control_mode:
+                    break
+
                 self.run_one_cycle(trajectory, one_cycle_duration=4)
 
                 now_time = time.time()
@@ -59,7 +64,8 @@ class SafetyController:
                 pbar.update(now_time - last_time)
                 last_time = now_time
 
-        self.axo_controller.exit_control_mode()
+        if self.axo_controller.in_control_mode:
+            self.axo_controller.exit_control_mode()
         self.axo_controller.change_control_mode("position")
 
     def close(self):
@@ -76,6 +82,6 @@ if __name__ == "__main__":
         traj_pos, traj_vel = load_trj("./gait_gen/final_gait.csv")
         safety_controller.run(trajectory=(traj_pos, traj_vel), duration=1800)
     except KeyboardInterrupt:
-        print("[info] Keyboard interrupt")
+        print("[info]: Keyboard interrupt")
     finally:
         safety_controller.close()
