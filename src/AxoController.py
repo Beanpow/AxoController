@@ -20,7 +20,7 @@ LegInfoType = Tuple[float, float, float, float]
 
 
 class AxoController:
-    def __init__(self, port: str, byterate: int = 38400, timeout: int = 0, angle_telorance: List[int] = [5, 50, 40, 5], verbose: bool = False, open_detection: bool = True):
+    def __init__(self, port: str, byterate: int = 38400, timeout: float = 0.02, angle_telorance: List[int] = [5, 50, 40, 5], verbose: bool = False, open_detection: bool = True):
         # Constant
         self._hip_limit = [-25, 95]  # degree
         self._knee_limit = [-100, 8]  # degree
@@ -30,7 +30,7 @@ class AxoController:
         self._knee_limit[1] -= angle_telorance[3]
         assert self._hip_limit[0] < self._hip_limit[1] and self._knee_limit[0] < self._knee_limit[1], "Angle telorance is too large."
         self._vel_limit = [-900, 900]  # rpm
-        self._current_limit = [-14, 14]  # A
+        self._current_limit = [-7, 7]  # A
         self._pos_factor = 100  # the pos will be multiplied by this factor
         self._current_factor = 100  # the current will be multiplied by this factor
         self._vel_download_factor = 1  # the vel will be multiplied by this factor when download to the robot
@@ -41,6 +41,7 @@ class AxoController:
         self.info_stacksize = 10000
         self.is_get_info = False
         self._last_send_message_time = time.time()
+        self._send_msg_lock = threading.Lock()
 
         # Variable for angle detection
         self.is_angle_detection = False
@@ -59,7 +60,7 @@ class AxoController:
             assert self.ser.is_open is True
         except Exception as e:
             print(f"[error]: {e}")
-            exit(1)
+            raise SystemExit
         self.verbose = verbose
 
         # Initial check
@@ -101,6 +102,7 @@ class AxoController:
 
     def _angle_detection(self) -> None:
         while self.is_angle_detection:
+            time.sleep(0.01)
             left_hip, left_knee, right_hip, right_knee = self.get_leg_pos()
             leg_current = self.get_leg_current()
             if self.verbose:
@@ -110,50 +112,69 @@ class AxoController:
             if left_hip < self._hip_limit[0] or left_hip > self._hip_limit[1]:
                 print(f"[fatal]: left_hip: {left_hip} is out of limit: {self._hip_limit}")
                 self.exit_control_mode()
+                break
 
             if left_knee < self._knee_limit[0] or left_knee > self._knee_limit[1]:
                 print(f"[fatal]: left_knee: {left_knee} is out of limit: {self._knee_limit}")
                 self.exit_control_mode()
+                break
 
             if right_hip < self._hip_limit[0] or right_hip > self._hip_limit[1]:
                 print(f"[fatal]: right_hip: {right_hip} is out of limit: {self._hip_limit}")
                 self.exit_control_mode()
+                break
 
             if right_knee < self._knee_limit[0] or right_knee > self._knee_limit[1]:
                 print(f"[fatal]: right_knee: {right_knee} is out of limit: {self._knee_limit}")
                 self.exit_control_mode()
+                break
 
             for i in range(4):
                 if leg_current[i] < self._current_limit[0] or leg_current[i] > self._current_limit[1]:
-                    print(f"[fatal]: leg_current: {leg_current[i]} is out of limit: {self._current_limit}")
+                    print(f"[fatal]: leg_current[{i}]: {leg_current[i]} is out of limit: {self._current_limit}")
                     self.exit_control_mode()
+                    # TODO: exit failed should be processed
+                    break
+            else:
+                continue
+            break  # Attention! The break will be executed when the for loop is breaked.
 
-            time.sleep(0.01)
+        if self.in_control_mode:
+            self.exit_control_mode()
+            print("[info]: angle detection thread exit, exit control mode")
 
     def close_controller(self):
         if self.in_control_mode:
             self.exit_control_mode()
-        if self.is_get_info:
-            self.close_receive_info()
         if self.is_angle_detection:
             self.close_angle_detection()
+        if self.is_get_info:
+            self.close_receive_info()
         if hasattr(self, 'ser') and self.ser.is_open:
             self.ser.close()
 
     def _send_message(self, msg: bytearray):
-        # TODO: add lock?
+        assert msg[-2] == check_sum(msg)
+
+        self._send_msg_lock.acquire()
+
         if self.verbose:
             print(f"[info]: Sending message: {msg}")
-        assert msg[-2] == check_sum(msg)
 
         if msg[2] in self.dangerous_cmds:
             self._cmd_check(msg)
 
         if (now := time.time()) - self._last_send_message_time < 0.005:
             time.sleep(0.005 - (now - self._last_send_message_time))
-        write_num = self.ser.write(msg)
-        assert write_num == len(msg)
+
+        try:
+            write_num = self.ser.write(msg)
+            assert write_num == len(msg)
+        except serial.SerialTimeoutException:
+            print(f"[error] Serial write timeout, message: {msg}")
         self._last_send_message_time = time.time()
+
+        self._send_msg_lock.release()
 
     def _cmd_check(self, msg):
         assert (cmd := msg[2]) in self.dangerous_cmds
@@ -239,8 +260,7 @@ class AxoController:
     def exit_control_mode(self):
         msg = bytearray([0xAA, 0x5, 0xA1, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
-        for i in range(2):
-            self._send_message(msg)
+        self._send_message(msg)
 
         self.update_in_control_mode()
         if self.in_control_mode is not False:
@@ -411,7 +431,7 @@ class AxoController:
         self.control_mode = mode
         robot_state = self.get_robot_state()
         assert robot_state[6] == mode_idx and robot_state[9] == mode_idx and robot_state[12] == mode_idx and robot_state[15] == mode_idx
-        print(f"[info] control mode changed to {mode}")
+        print(f"[info]: control mode changed to {mode}")
 
     def change_communication_state(self, state: str):
         assert state in ["close", "open"]
@@ -445,12 +465,18 @@ class AxoController:
     def _recevice_info(self):
         while self.is_get_info:
             # Prevent the msg is too short, which will cannot be decoded.
-            time.sleep(0.01)
-
-            self.info_stack.extend(self._get_info())
+            time.sleep(0.02)
+            try:
+                self.info_stack.extend(self._get_info())
+            except AssertionError:
+                self.close_receive_info()
 
             if len(self.info_stack) > self.info_stacksize:
                 self.info_stack = self.info_stack[-self.info_stacksize :]
+
+        if self.in_control_mode:
+            self.exit_control_mode()
+            print("[info]: receive info thread exit, exit control mode")
 
     def initial_check(self):
         self._check_commuintation()
@@ -505,27 +531,31 @@ class AxoController:
 
         return {"left": left_info, "right": right_info}
 
-    def get_robot_state(self, timeout: float = 0.1) -> bytes:
+    def get_robot_state(self, timeout: float = 0.2) -> bytes:
         self.change_communication_state("open")
-
-        time.sleep(timeout)
-        if self.is_get_info:
-            robot_state = self.info_stack[-1]
-        else:
-            robot_state = self._get_info()[-1]
-
-        assert robot_state[2] == 2, f"Cannot get robot state, current info_num is {robot_state[2]}, is_get_info: {self.is_get_info}, info_stack: {self.info_stack[-10:]}"
-
+        robot_state = self.get_info(info_type=[2], timeout=timeout)
         self.change_communication_state("close")
-
-        time.sleep(timeout)
-        if self.is_get_info:
-            tmp = self.info_stack[-1]
-        else:
-            tmp = self._get_info()[-1]
-        assert tmp[2] in [0, 1], f"Cannnot get leg state, current info_num is {tmp[2]}, is_get_info: {self.is_get_info}"
+        self.get_info(info_type=[0, 1], timeout=timeout)
 
         return robot_state
+
+    def get_info(self, info_type: list[int], timeout: float = 0.1):
+        start_time = time.time()
+        while True:
+            time.sleep(timeout / 10)
+            now = time.time()
+            if now - start_time > timeout:
+                raise Exception(f"Cannot get info in time. info_type: {info_type}")
+
+            if self.is_get_info:
+                info = self.info_stack
+            else:
+                info = self._get_info()
+
+            if len(info) != 0:
+                info = info[-1]
+                if info[2] in info_type:
+                    return info
 
     def _check_robot_state(self):
         robot_state = self.get_robot_state()[3]
