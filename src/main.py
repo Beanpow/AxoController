@@ -10,16 +10,21 @@
 
 import time
 
-from InfoPlottor import InfoPlottor
-from AxoController import AxoController
+from SafetyController import SafetyController
+from utils import load_trj
 
 
 def main():
-    port = "COM3"
-    axo_controller = AxoController(port=port)
-    info_plottor = InfoPlottor(axo_controller=axo_controller)
-    info_plottor.open_plot_info()
-    time.sleep(100)
+    traj = load_trj("./gait_gen/final_gait.csv")
+    safety_controller = SafetyController(moment_port="com5", axo_port="com3", trajectory=traj, isPlot=True)
+    try:
+        safety_controller.record_safe_info(5)
+        time.sleep(5)
+        safety_controller.run_with_detection(10)
+    except KeyboardInterrupt:
+        print("[info]: Keyboard interrupt")
+    finally:
+        safety_controller.close()
 
 
 if __name__ == "__main__":
