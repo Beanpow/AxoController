@@ -5,7 +5,7 @@ import numpy as np
 
 
 class MomentManager:
-    def __init__(self, port: str, byterate: int = 38400, timeout: float = 10) -> None:
+    def __init__(self, port: str, byterate: int = 38400, timeout: float = 1) -> None:
         self.__reqListForPortList = [
             bytes([0x01, 0x03, 0x00, 0x00, 0x00, 0x01, 0x84, 0x0A]),
             bytes([0x02, 0x03, 0x00, 0x00, 0x00, 0x01, 0x84, 0x39]),
@@ -25,7 +25,7 @@ class MomentManager:
 
     def init_check(self):
         assert self.get_all_moments()[0].shape == (4,)
-        assert np.any(np.isnan(self.get_all_moments()[0])) is False
+        assert not np.any(np.isnan(self.get_all_moments()[0]))
 
     def __del__(self):
         self.ser.close()
