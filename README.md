@@ -2,6 +2,9 @@
 
 This repository consist of axo controller, Moment safety detector and Info plottor.
 
+## TODO list
+- [ ] The angle detection don't work on setup stage
+
 ## Overview
 ```
  Safety controller (to be implemented)

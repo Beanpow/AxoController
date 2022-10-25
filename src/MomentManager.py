@@ -48,7 +48,7 @@ class MomentManager:
         try:
             assert len(parsedDataHex) == 42
         except AssertionError:
-            print(rawDataHex)
+            print(f"[error]: parsedDataHex is not 42, it is {len(parsedDataHex)}")
             sys.exit()
 
         momentList = []
