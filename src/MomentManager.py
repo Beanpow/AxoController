@@ -52,10 +52,10 @@ class MomentManager:
             sys.exit()
 
         momentList = []
-        momentList.append(int(parsedDataHex[6:14], 16))
-        momentList.append(int(parsedDataHex[14:22], 16))
         momentList.append(int(parsedDataHex[22:30], 16))
         momentList.append(int(parsedDataHex[30:38], 16))
+        momentList.append(int(parsedDataHex[6:14], 16))
+        momentList.append(int(parsedDataHex[14:22], 16))
 
         for i in range(4):
             if momentList[i] > 2147483648:
