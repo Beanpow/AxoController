@@ -4,6 +4,8 @@ This repository consist of axo controller, Moment safety detector and Info plott
 
 ## TODO list
 - [ ] The angle detection don't work on setup stage
+- [ ] The angle detection could add counter to avoid false alarm
+- [ ] Comfirm the cycle is exactly correct
 
 ## Overview
 ```
