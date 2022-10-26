@@ -8,6 +8,8 @@ This repository consist of axo controller, Moment safety detector and Info plott
 - [ ] Comfirm the cycle is exactly correct
 
 ## Overview
+![flow](https://github.com/Beanpow/AxoController/blob/master/img/flow.png)
+
 ```
  Safety controller (to be implemented)
  ┣ Axo Controller (to be tested)
