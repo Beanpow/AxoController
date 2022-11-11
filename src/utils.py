@@ -185,3 +185,10 @@ def load_trj(file_path):
             trj.append([float(i) for i in line])
     trj_pos, trj_vel = trj[: len(trj) // 2], trj[len(trj) // 2 :]
     return trj_pos, trj_vel
+
+
+def accurate_delay(delay):
+    '''Function to provide accurate time delay in millisecond'''
+    _ = time.perf_counter() + delay / 1000
+    while time.perf_counter() < _:
+        pass

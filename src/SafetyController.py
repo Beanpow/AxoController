@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from InfoPlottor import InfoPlottor
 from AxoController import AxoController
 from MomentManager import MomentManager
+from utils import accurate_delay
 
 
 class SafetyController:
@@ -50,8 +51,10 @@ class SafetyController:
 
         with tqdm(total=cycle_num) as pbar:
             for _ in range(cycle_num):
+                start_time = time.time()
                 self.run_one_cycle(callback_func=self.record_callback)
                 pbar.update(1)
+                print(f"cycle time: {(time.time() - start_time)}")
 
         self.process_raw_data()
 
@@ -117,8 +120,10 @@ class SafetyController:
 
             self.axo_controller.set_all_motors_pos_vel_based(target_pos, target_vel)
 
-            assert time.time() - start_time <= one_step_time, "one step time is too short"
-            time.sleep(one_step_time - (time.time() - start_time))
+            assert time.time() - start_time <= one_step_time, f"one step time is too short, {time.time() - start_time} > {one_step_time}"
+            accurate_delay((one_step_time - (time.time() - start_time)) * 1000)
+            print(f"step time: {(time.time() - start_time)}, one step time: {one_step_time}")
+            # time.sleep(one_step_time - (time.time() - start_time))
 
     def detect_callback(self, indx: int) -> bool:
         moments = self.moment_menager.get_all_moments()[0]
