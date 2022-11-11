@@ -43,6 +43,9 @@ class AxoController:
         self._last_send_message_time = time.time()
         self._send_msg_lock = threading.Lock()
 
+        # Variable for heartbeat
+        self.is_heartbeat = False
+
         # Variable for angle detection
         self.is_angle_detection = False
 
@@ -79,6 +82,9 @@ class AxoController:
 
         # Receive info thread
         self.open_receive_info()
+
+        # Heartbeat thread
+        self.open_send_heartbeat()
 
         # Angle detection thread
         time.sleep(0.05)  # wait for the info thread to start
@@ -269,6 +275,24 @@ class AxoController:
         self.update_in_control_mode()
         if self.in_control_mode is not True:
             raise Exception("Enter control mode failed.")
+
+    def open_send_heartbeat(self):
+        self.is_heartbeat = True
+
+        self._send_heartbeat_thread = threading.Thread(target=self._send_heartbeat)
+        self._send_heartbeat_thread.start()
+
+    def close_send_heartbeat(self):
+        self.is_heartbeat = False
+
+    def _send_heartbeat(self):
+        while self.is_heartbeat:
+            now = time.time()
+
+            if now - self._last_send_message_time < 0.35:
+                time.sleep(0.35 - (now - self._last_send_message_time))
+
+            self.change_communication_test("close")
 
     def motor_name2id(self, motor_name: str) -> int:
         assert motor_name in ["left_hip", "left_knee", "right_hip", "right_knee"]
@@ -467,6 +491,20 @@ class AxoController:
         assert state_id in [0, 1]
 
         msg = bytearray([0xAA, 0x6, 0xA9, state_id, 0x00, 0xBB])
+        msg[-2] = check_sum(msg)
+
+        self._send_message(msg)
+
+    def change_communication_test(self, state: str):
+        assert state in ["close", "open"]
+
+        state_id = -1
+        if state == "close":
+            state_id = 0
+        elif state == "open":
+            state_id = 1
+
+        msg = bytearray([0xAA, 0x6, 0xAA, state_id, 0x00, 0xBB])
         msg[-2] = check_sum(msg)
 
         self._send_message(msg)

@@ -28,7 +28,8 @@ class MomentManager:
         assert not np.any(np.isnan(self.get_all_moments()[0]))
 
     def __del__(self):
-        self.ser.close()
+        if hasattr(self, "ser"):
+            self.ser.close()
 
     def _SendMessage(self, req):
         self.ser.write(req)
