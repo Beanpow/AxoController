@@ -101,7 +101,12 @@ class AxoController:
         assert self.angle_detection_thread.is_alive() is False
 
     def _angle_detection(self) -> None:
+        angle_error_nums = 0
+        tolerance = 4
+
         while self.is_angle_detection:
+            last_angle_error_nums = angle_error_nums
+
             time.sleep(0.01)
             left_hip, left_knee, right_hip, right_knee = self.get_leg_pos()
             leg_current = self.get_leg_current()
@@ -110,33 +115,51 @@ class AxoController:
                 print(f"[info]: current, left_hip: {leg_current[0]}, left_knee: {leg_current[1]}, right_hip: {leg_current[2]}, right_knee: {leg_current[3]}")
 
             if left_hip < self._hip_limit[0] or left_hip > self._hip_limit[1]:
-                print(f"[fatal]: left_hip: {left_hip} is out of limit: {self._hip_limit}")
-                self.exit_control_mode()
-                break
+                if angle_error_nums < tolerance:
+                    angle_error_nums += 1
+                else:
+                    print(f"[fatal]: left_hip: {left_hip} is out of limit: {self._hip_limit}")
+                    self.exit_control_mode()
+                    break
 
             if left_knee < self._knee_limit[0] or left_knee > self._knee_limit[1]:
-                print(f"[fatal]: left_knee: {left_knee} is out of limit: {self._knee_limit}")
-                self.exit_control_mode()
-                break
+                if angle_error_nums < tolerance:
+                    angle_error_nums += 1
+                else:
+                    print(f"[fatal]: left_knee: {left_knee} is out of limit: {self._knee_limit}")
+                    self.exit_control_mode()
+                    break
 
             if right_hip < self._hip_limit[0] or right_hip > self._hip_limit[1]:
-                print(f"[fatal]: right_hip: {right_hip} is out of limit: {self._hip_limit}")
-                self.exit_control_mode()
-                break
+                if angle_error_nums < tolerance:
+                    angle_error_nums += 1
+                else:
+                    print(f"[fatal]: right_hip: {right_hip} is out of limit: {self._hip_limit}")
+                    self.exit_control_mode()
+                    break
 
             if right_knee < self._knee_limit[0] or right_knee > self._knee_limit[1]:
-                print(f"[fatal]: right_knee: {right_knee} is out of limit: {self._knee_limit}")
-                self.exit_control_mode()
-                break
+                if angle_error_nums < tolerance:
+                    angle_error_nums += 1
+                else:
+                    print(f"[fatal]: right_knee: {right_knee} is out of limit: {self._knee_limit}")
+                    self.exit_control_mode()
+                    break
 
             for i in range(4):
                 if leg_current[i] < self._current_limit[0] or leg_current[i] > self._current_limit[1]:
-                    print(f"[fatal]: leg_current[{i}]: {leg_current[i]} is out of limit: {self._current_limit}")
-                    self.exit_control_mode()
-                    # TODO: exit failed should be processed
-                    break
+                    if angle_error_nums < tolerance:
+                        angle_error_nums += 1
+                    else:
+                        print(f"[fatal]: leg_current[{i}]: {leg_current[i]} is out of limit: {self._current_limit}")
+                        self.exit_control_mode()
+                        # TODO: exit failed should be processed
+                        break
             else:
+                if last_angle_error_nums == angle_error_nums:
+                    angle_error_nums = 0
                 continue
+
             break  # Attention! The break will be executed when the for loop is breaked.
 
         if self.in_control_mode:
