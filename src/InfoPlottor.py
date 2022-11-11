@@ -15,7 +15,7 @@ from AxoController import AxoController
 
 class InfoPlottor:
     def __init__(self, axo_controller: AxoController) -> None:
-        self.mutliprocess_plot = MutliprocessPlot(drawSize=200, bound=[(-80, 60), (-1000, 1000), (-12, 12)])
+        self.mutliprocess_plot = MutliprocessPlot(drawSize=200, bound=[(-80, 60), (-1800, 1700), (-12, 12)])
         self.axo_controller = axo_controller
 
         # Variable for plot_info
