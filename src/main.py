@@ -16,7 +16,7 @@ from utils import load_trj
 
 def main():
     traj = load_trj("./gait_gen/final_gait.csv")
-    safety_controller = SafetyController(moment_port="com5", axo_port="com3", trajectory=traj, isPlot=True)
+    safety_controller = SafetyController(moment_port="com5", axo_port="com3", trajectory=traj, isPlot=True, isStimulate=True)
     try:
         safety_controller.record_safe_info(5)
         time.sleep(5)

@@ -18,11 +18,12 @@ import matplotlib.pyplot as plt
 from InfoPlottor import InfoPlottor
 from AxoController import AxoController
 from MomentManager import MomentManager
+from StimulateController import StimulateController
 from utils import accurate_delay
 
 
 class SafetyController:
-    def __init__(self, axo_port: str, moment_port: str, trajectory: tuple[list[list[float]], list[list[float]]], isPlot: bool = True) -> None:
+    def __init__(self, axo_port: str, moment_port: str, trajectory: tuple[list[list[float]], list[list[float]]], isPlot: bool = True, isStimulate: bool = False) -> None:
         self.trajectory = trajectory
         self.one_cycle_time = 4  # unit: second
         self.factor = 8
@@ -38,6 +39,9 @@ class SafetyController:
         self.safe_cur_mom = None
 
         self.runtime_record = []
+
+        if isStimulate:
+            self.stimulator = StimulateController()
 
     def record_safe_info(self, cycle_num: int):
         self.axo_controller.enter_control_mode()
@@ -159,6 +163,8 @@ class SafetyController:
         self.axo_controller.enter_control_mode(isChangeMode=False)
         self.axo_controller.set_all_motors_pos_vel_based_sync(self.trajectory[0][0])
 
+        self.stimulator.start_stimulate()
+
         with tqdm(total=cycle_num) as pbar:
             for _ in range(cycle_num):
                 if not self.axo_controller.in_control_mode:
@@ -166,6 +172,8 @@ class SafetyController:
 
                 self.run_one_cycle(self.detect_callback)
                 pbar.update(1)
+
+        self.stimulator.stop_stimulate()
 
         if self.axo_controller.in_control_mode:
             self.axo_controller.exit_control_mode()
