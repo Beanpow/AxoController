@@ -11,7 +11,7 @@ import serial
 import threading
 import time
 import numpy as np
-from utils import PID
+from utils import PID, accurate_delay
 from typing import Union, List, Tuple
 from utils import check_sum, from_16bit_to_int, from_int_to_16bit
 
@@ -38,7 +38,7 @@ class AxoController:
 
         # Variable for communication
         self.info_stack = []
-        self.info_stacksize = 10000
+        self.info_stacksize = 1000
         self.is_get_info = False
         self._last_send_message_time = time.time()
         self._send_msg_lock = threading.Lock()
@@ -175,6 +175,8 @@ class AxoController:
     def close_controller(self):
         if self.in_control_mode:
             self.exit_control_mode()
+        if self.is_heartbeat:
+            self.close_send_heartbeat()
         if self.is_angle_detection:
             self.close_angle_detection()
         if self.is_get_info:
@@ -280,12 +282,14 @@ class AxoController:
         self.is_heartbeat = True
 
         self._send_heartbeat_thread = threading.Thread(target=self._send_heartbeat)
+        self._send_heartbeat_thread.setDaemon(True)
         self._send_heartbeat_thread.start()
 
     def close_send_heartbeat(self):
         self.is_heartbeat = False
 
     def _send_heartbeat(self):
+        # TODO: move to a new processs
         while self.is_heartbeat:
             now = time.time()
 
@@ -293,6 +297,7 @@ class AxoController:
                 time.sleep(0.35 - (now - self._last_send_message_time))
 
             self.change_communication_test("close")
+            time.sleep(0.35)
 
     def motor_name2id(self, motor_name: str) -> int:
         assert motor_name in ["left_hip", "left_knee", "right_hip", "right_knee"]
@@ -383,7 +388,7 @@ class AxoController:
 
         self.set_all_motors_vel(control_value)
 
-    def set_all_motors_pos_vel_based_sync(self, pos: List[float], norm: float = 3) -> None:
+    def set_all_motors_pos_vel_based_sync(self, pos: List[float], norm: float = 4) -> None:
         init_pos_norm = self._angle_norm(self.get_leg_pos(), pos)
 
         while (angle_norm := self._angle_norm((leg_info := self.get_leg_pos()), pos)) > norm:
@@ -398,6 +403,8 @@ class AxoController:
         self.set_all_motors_pos_async(pos)
 
         while self._angle_norm(self.get_leg_pos(), pos) > 0.1:
+            if self.verbose:
+                print(self.get_leg_pos())
             time.sleep(0.05)
 
     def get_leg_pos(self) -> LegInfoType:

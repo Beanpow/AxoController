@@ -26,7 +26,7 @@ class SafetyController:
     def __init__(self, axo_port: str, moment_port: str, trajectory: tuple[list[list[float]], list[list[float]]], isPlot: bool = True, isStimulate: bool = False) -> None:
         self.trajectory = trajectory
         self.one_cycle_time = 4  # unit: second
-        self.factor = 8
+        self.factor = 15
 
         self.moment_menager = MomentManager(port=moment_port)
         self.axo_controller = AxoController(port=axo_port)
@@ -40,6 +40,7 @@ class SafetyController:
 
         self.runtime_record = []
 
+        self.isStimulate = isStimulate
         if isStimulate:
             self.stimulator = StimulateController()
 
@@ -53,12 +54,20 @@ class SafetyController:
         self.axo_controller.enter_control_mode(isChangeMode=False)
         self.axo_controller.set_all_motors_pos_vel_based_sync(self.trajectory[0][0])
 
+        print(f"[info]: start all control, time is {time.time()}")
+
+        if self.isStimulate:
+            self.stimulator.start_stimulate()
+
         with tqdm(total=cycle_num) as pbar:
             for _ in range(cycle_num):
                 start_time = time.time()
                 self.run_one_cycle(callback_func=self.record_callback)
                 pbar.update(1)
                 print(f"cycle time: {(time.time() - start_time)}")
+
+        if self.isStimulate:
+            self.stimulator.stop_stimulate()
 
         self.process_raw_data()
 
@@ -110,7 +119,7 @@ class SafetyController:
 
     def run_one_cycle(self, callback_func: Callable):
         traj_pos, traj_vel = self.trajectory
-        one_step_time = self.one_cycle_time / len(traj_pos)
+        one_step_time = self.one_cycle_time / (len(traj_pos) - 1)
         for idx, (target_pos, target_vel) in enumerate(zip(traj_pos, traj_vel)):
             start_time = time.time()
             if not self.axo_controller.in_control_mode:
@@ -125,9 +134,37 @@ class SafetyController:
             self.axo_controller.set_all_motors_pos_vel_based(target_pos, target_vel)
 
             assert time.time() - start_time <= one_step_time, f"one step time is too short, {time.time() - start_time} > {one_step_time}"
-            accurate_delay((one_step_time - (time.time() - start_time)) * 1000)
-            print(f"step time: {(time.time() - start_time)}, one step time: {one_step_time}")
-            # time.sleep(one_step_time - (time.time() - start_time))
+            time.sleep(one_step_time - (time.time() - start_time))
+
+    def run_one_cycle_new(self, callback_func: Callable):
+        cycle_start_time = time.time()
+        traj_pos, traj_vel = self.trajectory
+        one_step_time = self.one_cycle_time / (len(traj_pos) - 1)
+        next_step_time = cycle_start_time + one_step_time
+
+        # Axo currently on the first step, so we start from the second step
+        for idx, (target_pos, target_vel) in enumerate(zip(traj_pos[1:], traj_vel[1:])):
+            if not self.axo_controller.in_control_mode:
+                # TODO: should we break here? or raise an exception?
+                break
+
+            if self.isPlot:
+                self.info_plottor.set_target_pos(target_pos)
+
+            if not callback_func(idx):
+                # TODO: the same as above
+                break
+
+            self.axo_controller.set_all_motors_pos_vel_based(target_pos, target_vel)
+
+            assert time.time() < next_step_time, f"one step time is too short, {time.time()} > {next_step_time}"
+            # accurate_delay((next_step_time - time.time()) * 1000)
+            # print(f"step time: {(time.time() - cycle_start_time)}")
+            time.sleep(next_step_time - time.time())
+            next_step_time += one_step_time
+
+    def empty_callback(self, indx: int) -> bool:
+        return True
 
     def detect_callback(self, indx: int) -> bool:
         moments = self.moment_menager.get_all_moments()[0]
@@ -163,7 +200,8 @@ class SafetyController:
         self.axo_controller.enter_control_mode(isChangeMode=False)
         self.axo_controller.set_all_motors_pos_vel_based_sync(self.trajectory[0][0])
 
-        self.stimulator.start_stimulate()
+        if self.isStimulate:
+            self.stimulator.start_stimulate()
 
         with tqdm(total=cycle_num) as pbar:
             for _ in range(cycle_num):
@@ -173,7 +211,8 @@ class SafetyController:
                 self.run_one_cycle(self.detect_callback)
                 pbar.update(1)
 
-        self.stimulator.stop_stimulate()
+        if self.isStimulate:
+            self.stimulator.stop_stimulate()
 
         if self.axo_controller.in_control_mode:
             self.axo_controller.exit_control_mode()

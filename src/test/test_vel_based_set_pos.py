@@ -19,7 +19,7 @@ def main():
     try:
         print("Start")
         for i in range(2000):
-            axo.set_all_motors_pos_vel_based([20, 0, 0, 0], [0, 0, 0, 0])
+            axo.set_all_motors_pos_vel_based([0, 0, 10, 0], [0, 0, 0, 0])
 
             time.sleep(0.05)
     finally:
