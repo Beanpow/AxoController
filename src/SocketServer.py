@@ -6,7 +6,10 @@ class SocketServer:
         self.host = host
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.create_socket()
+        try:
+            self.create_socket()
+        except KeyboardInterrupt:
+            self.close_socket()
 
     def create_socket(self):
         self.sock.bind((self.host, self.port))
