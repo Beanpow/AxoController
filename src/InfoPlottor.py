@@ -8,6 +8,8 @@
 @Desc    :   None
 '''
 import time
+import numpy as np
+
 from MutliprocessPlot import MutliprocessPlot
 import threading
 from AxoController import AxoController
@@ -22,6 +24,8 @@ class InfoPlottor:
         self.is_plot_info = False
         self.target_pos = [0, 0, 0, 0]
 
+        self.data = []
+
     def open_plot_info(self) -> None:
         self.is_plot_info = True
         self.mutliprocess_plot.start()
@@ -34,6 +38,9 @@ class InfoPlottor:
         self.is_plot_info = False
         self.mutliprocess_plot.stop()
 
+        self.data = np.array(self.data)
+        np.save(f"logs/axo_info_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.npy", self.data)
+
         time.sleep(0.3)
         assert self.plot_info_thread.is_alive() is False
 
@@ -42,5 +49,13 @@ class InfoPlottor:
 
     def _plot_info(self):
         while self.is_plot_info:
-            self.mutliprocess_plot.main_conn.send([*self.axo_controller.get_leg_pos(), *self.axo_controller.get_leg_vel(), *self.axo_controller.get_leg_current(), *self.target_pos])
+            start_time = time.time()
+            leg_info = self.axo_controller.get_leg_info()
+
+            leg_pos = [leg_info["left"]["hip_pos"], leg_info["left"]["knee_pos"], leg_info["right"]["hip_pos"], leg_info["right"]["knee_pos"]]
+            leg_vel = [leg_info["left"]["hip_vel"], leg_info["left"]["knee_vel"], leg_info["right"]["hip_vel"], leg_info["right"]["knee_vel"]]
+            leg_current = [leg_info["left"]["hip_current"], leg_info["left"]["knee_current"], leg_info["right"]["hip_current"], leg_info["right"]["knee_current"]]
+
+            self.data.append([start_time, *leg_pos, *leg_vel, *leg_current, *self.target_pos])
+            self.mutliprocess_plot.main_conn.send([*leg_pos, *self.axo_controller.get_leg_vel(), *self.axo_controller.get_leg_current(), *self.target_pos])
             time.sleep(0.03)
