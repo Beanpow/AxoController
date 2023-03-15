@@ -87,7 +87,7 @@ class AxoController:
         self.open_send_heartbeat()
 
         # Angle detection thread
-        time.sleep(0.05)  # wait for the info thread to start
+        time.sleep(0.5)  # wait for the info thread to start
         if open_detection:
             self.open_angle_detection()
 

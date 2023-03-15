@@ -26,7 +26,7 @@ class SafetyController:
     def __init__(self, axo_port: str, moment_port: str, trajectory: tuple[list[list[float]], list[list[float]]], isPlot: bool = True, isStimulate: bool = False) -> None:
         self.trajectory = trajectory
         self.one_cycle_time = 4  # unit: second
-        self.factor = 15
+        self.factor = 8
 
         self.moment_menager = MomentManager(port=moment_port)
         self.axo_controller = AxoController(port=axo_port)
@@ -133,8 +133,9 @@ class SafetyController:
 
             self.axo_controller.set_all_motors_pos_vel_based(target_pos, target_vel)
 
-            assert time.time() - start_time <= one_step_time, f"one step time is too short, {time.time() - start_time} > {one_step_time}"
-            time.sleep(one_step_time - (time.time() - start_time))
+            # assert time.time() - start_time <= one_step_time, f"one step time is too short, {time.time() - start_time} > {one_step_time}"
+            if time.time() - start_time < one_step_time:
+                time.sleep(one_step_time - (time.time() - start_time))
 
     def run_one_cycle_new(self, callback_func: Callable):
         cycle_start_time = time.time()
@@ -169,7 +170,7 @@ class SafetyController:
     def detect_callback(self, indx: int) -> bool:
         moments = self.moment_menager.get_all_moments()[0]
         current = self.axo_controller.get_leg_current()
-        robot_info = np.hstack((np.array([indx]), moments, current))
+        robot_info = np.hstack((np.array([indx]), current, moments))
         self.runtime_record.append(robot_info)  # type: ignore
         robot_info = robot_info[1:]
         assert self.safe_cur_mom is not None

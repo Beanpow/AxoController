@@ -64,3 +64,10 @@ class MomentManager:
             momentList[i] /= 100
 
         return np.array(momentList), [1, 2, 3, 4], parsedDataHex
+
+
+if __name__ == "__main__":
+    m = MomentManager("COM5")
+    while True:
+
+        print(m.get_all_moments())
