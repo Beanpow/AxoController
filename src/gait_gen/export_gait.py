@@ -35,11 +35,11 @@ def main():
 
     t = np.arange(len(total_gait)).reshape(-1, 1) / len(total_gait) * cycle_time
 
-    final_shape = (3 * (len(t) - 1), 4)  # control rate is 50 / 4 * 3 H
+    final_shape = (2 * (len(t) - 1), 4)  # control rate is 50 * 2 Hz
     total_y_new = np.empty(final_shape)
     total_y_hat_new = np.empty(final_shape)
 
-    x_new = np.arange(0, cycle_time + 0.000001, cycle_time / (len(t) - 1) / 3)
+    x_new = np.arange(0, cycle_time + 0.000001, cycle_time / (len(t) - 1) / 2)
     for i in range(4):
         tck = interpolate.splrep(t, total_gait[:, i], s=40, per=True)
 
@@ -56,7 +56,9 @@ def main():
     plt.legend(["vel", "pos"])
     plt.show()
 
-    with open("./final_gait.csv", "w") as f:
+    print(total_gait.shape)
+
+    with open("./final_gait_100.csv", "w") as f:
         for gait in total_gait:
             f.writelines(','.join([str(i) for i in gait]) + '\n')
 
