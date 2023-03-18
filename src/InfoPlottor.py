@@ -16,9 +16,11 @@ from AxoController import AxoController
 
 
 class InfoPlottor:
-    def __init__(self, axo_controller: AxoController) -> None:
+    def __init__(self, axo_controller: AxoController, log_path: str = None) -> None:
         self.mutliprocess_plot = MutliprocessPlot(drawSize=200, bound=[(-80, 60), (-1800, 1700), (-12, 12)])
         self.axo_controller = axo_controller
+
+        self.log_path = log_path
 
         # Variable for plot_info
         self.is_plot_info = False
@@ -39,7 +41,10 @@ class InfoPlottor:
         self.mutliprocess_plot.stop()
 
         self.data = np.array(self.data)
-        np.save(f"logs/axo_info_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.npy", self.data)
+        if self.log_path is not None:
+            np.save(f"{self.log_path}/axo_info.npy", self.data)
+        else:
+            np.save(f"logs/axo_info_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.npy", self.data)
 
         time.sleep(0.3)
         assert self.plot_info_thread.is_alive() is False

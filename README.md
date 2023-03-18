@@ -7,6 +7,9 @@ This repository consist of axo controller, Moment safety detector and Info plott
 - [ ] The angle detection could add counter to avoid false alarm
 - [ ] Comfirm the cycle is exactly correct
 
+- [ ] DO NOT open the robot when the robot on the standup mode
+- [ ] Detection thread can not stop the main thread
+
 ## Overview
 ![flow](https://github.com/Beanpow/AxoController/blob/master/img/flow.png)
 

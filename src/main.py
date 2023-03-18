@@ -22,10 +22,12 @@ def main():
     try:
         input("Press Enter to start...")
         safety_controller.record_safe_info(5)
-        time.sleep(5)
-        safety_controller.run_with_detection(10)
+        time.sleep(10)
+        safety_controller.run_with_detection(15 * 10)
     except KeyboardInterrupt:
         print("[info]: Keyboard interrupt")
+    except Exception as e:
+        print("[error]: ", e)
     finally:
         safety_controller.close()
 

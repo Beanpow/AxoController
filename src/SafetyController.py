@@ -9,6 +9,7 @@
 '''
 
 import time
+import os
 from tqdm import tqdm
 from typing import Callable
 import numpy as np
@@ -28,11 +29,15 @@ class SafetyController:
         self.one_cycle_time = 4  # unit: second
         self.factor = 8
 
+        self.user_name = input("Please input user name: ")
+        self.log_path = f"logs/{self.user_name}_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}"
+        os.mkdir(self.log_path)
+
         self.moment_menager = MomentManager(port=moment_port)
         self.axo_controller = AxoController(port=axo_port)
         self.isPlot = isPlot
         if self.isPlot:
-            self.info_plottor = InfoPlottor(axo_controller=self.axo_controller)
+            self.info_plottor = InfoPlottor(axo_controller=self.axo_controller, log_path=self.log_path)
             self.info_plottor.open_plot_info()
 
         self.safe_cur_mom_raw = []
@@ -88,6 +93,7 @@ class SafetyController:
     def process_raw_data(self):
         self.safe_cur_mom_raw = np.array(self.safe_cur_mom_raw)
         assert self.safe_cur_mom_raw.shape[0] > 0
+        np.save(f"{self.log_path}/safe_cur_mom_raw.npy", self.safe_cur_mom_raw)
 
         max_indx = int(max(self.safe_cur_mom_raw[:, 0]) + 1)
         indx_set = [[] for i in range(max_indx)]
@@ -115,7 +121,7 @@ class SafetyController:
 
         self.safe_cur_mom = safe_cur_mom
 
-        np.save("safe_moment.npy", self.safe_cur_mom)
+        np.save(f"{self.log_path}/safe_cur_mom.npy", self.safe_cur_mom)
 
     def run_one_cycle(self, callback_func: Callable):
         traj_pos, traj_vel = self.trajectory
@@ -225,6 +231,9 @@ class SafetyController:
         motor_name = ["Left Hip", "Left Knee", "Right Hip", "Right Knee"]
 
         self.runtime_record = np.array(self.runtime_record)
+
+        np.save(f"{self.log_path}/detected_info.npy", self.runtime_record)
+
         if self.runtime_record.shape[0] == 0:
             print("[error]: no data in runtime_record")
             return
